@@ -2,7 +2,10 @@ import os
 
 from flask import Flask
 
+from diagram import diagram_bp
+
 app = Flask(__name__)
+app.register_blueprint(diagram_bp)
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "local")
 
@@ -12,6 +15,7 @@ def hello():
     return f"""
 <h1>🚀 My First Cloud Deployment Project</h1>
 <p><strong>Environment:</strong> {ENVIRONMENT}</p>
+<p><a href="/diagram">Open project–risk diagram demo →</a></p>
 
 <h2>✅ What I accomplished</h2>
 
