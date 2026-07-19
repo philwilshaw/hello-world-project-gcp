@@ -10,6 +10,7 @@ ENVIRONMENT = os.environ.get("ENVIRONMENT", "local")
 @app.route("/")
 def hello():
     return f"""
+    <p><strong>Dev deploy test:</strong> working</p>
 <h1>🚀 My First Cloud Deployment Project</h1>
 <p><strong>Environment:</strong> {ENVIRONMENT}</p>
 
