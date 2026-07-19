@@ -20,6 +20,7 @@ from db import (
     fetch_architecture_detail,
     fetch_project_detail,
     fetch_risk_detail,
+    get_db_status,
     remove_link,
 )
 
@@ -193,6 +194,32 @@ button.remove-link {
 }
 .form-status.error { color: #ff8f84; }
 .form-status.ok { color: var(--accent); }
+.db-banner {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.03);
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.db-banner strong { color: var(--text); }
+.db-banner.locked {
+  border-color: #c94c3f55;
+  background: #c94c3f18;
+}
+.db-banner.open {
+  border-color: #2f9e6b55;
+  background: #2f9e6b18;
+}
+.link-form.writes-locked input,
+.link-form.writes-locked select,
+.link-form.writes-locked button,
+button.remove-link:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+}
 """
 
 LINK_SCRIPT = r"""
@@ -237,6 +264,12 @@ LINK_SCRIPT = r"""
       return;
     }
 
+    if (form.classList.contains("writes-locked")) {
+      status.textContent = "Database changes are currently locked.";
+      status.classList.add("error");
+      return;
+    }
+
     const response = await fetch("/api/links", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -251,7 +284,8 @@ LINK_SCRIPT = r"""
     window.location.reload();
   }
 
-  async function removeLink(edgeId, label) {
+  async function removeLink(edgeId, label, button) {
+    if (button && button.disabled) return;
     const ok = window.confirm(
       "Remove this link" + (label ? ` (${label})` : "") + "?\n\nThis cannot be undone from this screen."
     );
@@ -279,7 +313,7 @@ LINK_SCRIPT = r"""
     const button = event.target.closest("button.remove-link");
     if (!button) return;
     event.preventDefault();
-    removeLink(button.dataset.edgeId, button.dataset.label || "");
+    removeLink(button.dataset.edgeId, button.dataset.label || "", button);
   });
 </script>
 """
@@ -329,21 +363,42 @@ def _relationship_options(values):
     )
 
 
-def _remove_button(edge_id, label):
+def _db_banner(status=None):
+    status = status or get_db_status()
+    if status["writes_enabled"]:
+        return (
+            "<div class='db-banner open'>"
+            f"<strong>Environment:</strong> {_esc(status['environment'])} · "
+            "<strong>Database changes:</strong> allowed · "
+            "This database is backed up hourly and reset to the last safe copy at midnight."
+            "</div>"
+        )
     return (
-        f'<button type="button" class="remove-link" '
-        f'data-edge-id="{_esc(edge_id)}" data-label="{_esc(label)}">Remove</button>'
+        "<div class='db-banner locked'>"
+        f"<strong>Environment:</strong> {_esc(status['environment'])} · "
+        "<strong>Database changes:</strong> locked · "
+        "Add/remove link controls are disabled. "
+        "The database is still reset to the last safe copy at midnight."
+        "</div>"
     )
 
 
-def _linked_item(href, text, meta, edge_id, label):
+def _remove_button(edge_id, label, writes_enabled=True):
+    disabled = "" if writes_enabled else " disabled"
+    return (
+        f'<button type="button" class="remove-link" '
+        f'data-edge-id="{_esc(edge_id)}" data-label="{_esc(label)}"{disabled}>Remove</button>'
+    )
+
+
+def _linked_item(href, text, meta, edge_id, label, writes_enabled=True):
     return f"""
       <li>
         <div class="item-main">
           <a class="title-link" href="{_esc(href)}">{_esc(text)}</a>
           <div class="meta">{_esc(meta)}</div>
         </div>
-        {_remove_button(edge_id, label)}
+        {_remove_button(edge_id, label, writes_enabled=writes_enabled)}
       </li>
     """
 
@@ -403,6 +458,7 @@ def projects_list():
         subtitle="All projects from the projects table",
         styles=BASE_STYLES,
         nav=_nav("Projects"),
+        db_banner=_db_banner(),
         table_head="""
           <th>ID</th><th>Title</th><th>Description</th>
           <th>Accountable contact</th><th>Start</th><th>End</th>
@@ -436,6 +492,7 @@ def risks_list():
         subtitle="All corporate risks from the risks table",
         styles=BASE_STYLES,
         nav=_nav("Risks"),
+        db_banner=_db_banner(),
         table_head="""
           <th>ID</th><th>Title</th><th>Description</th>
           <th>Impact</th><th>Proximity</th><th>Value</th>
@@ -469,6 +526,7 @@ def architecture_list():
         subtitle="All architecture components from the architecture_components table",
         styles=BASE_STYLES,
         nav=_nav("Architecture"),
+        db_banner=_db_banner(),
         table_head="""
           <th>ID</th><th>Title</th><th>Description</th>
           <th>Type</th><th>Owner</th><th>Capability</th><th>Outlook</th>
@@ -484,6 +542,10 @@ def project_detail(project_id):
     if data is None:
         abort(404)
     p = data["project"]
+    status = get_db_status()
+    writes_enabled = status["writes_enabled"]
+    form_lock = "" if writes_enabled else " writes-locked"
+    form_disabled = "" if writes_enabled else " disabled"
 
     linked_risk_ids = {r["id"] for r in data["linked_risks"]}
     linked_arch_ids = {a["id"] for a in data["linked_architecture"]}
@@ -499,6 +561,7 @@ def project_detail(project_id):
             f"Relationship: {r['relationship']}",
             r["edge_id"],
             f"{r['id']} {r['relationship']}",
+            writes_enabled=writes_enabled,
         )
         for r in data["linked_risks"]
     ]
@@ -509,6 +572,7 @@ def project_detail(project_id):
             f"Relationship: {a['relationship']}",
             a["edge_id"],
             f"{a['id']} {a['relationship']}",
+            writes_enabled=writes_enabled,
         )
         for a in data["linked_architecture"]
     ]
@@ -528,10 +592,10 @@ def project_detail(project_id):
     linked = f"""
       <h3 class="section-title">Linked risks</h3>
       {"<ul class='linked-list'>" + "".join(risk_items) + "</ul>" if risk_items else "<p class='empty'>No linked risks</p>"}
-      <form class="link-form" data-mode="from-project" data-project-id="{_esc(p['id'])}" data-linked-type="risk">
-        <input type="text" name="item" list="risk-options" placeholder="Select or type a risk" autocomplete="off" />
-        <select name="relationship">{_relationship_options(RISK_RELATIONSHIPS)}</select>
-        <button type="submit">Add risk link</button>
+      <form class="link-form{form_lock}" data-mode="from-project" data-project-id="{_esc(p['id'])}" data-linked-type="risk">
+        <input type="text" name="item" list="risk-options" placeholder="Select or type a risk" autocomplete="off"{form_disabled} />
+        <select name="relationship"{form_disabled}>{_relationship_options(RISK_RELATIONSHIPS)}</select>
+        <button type="submit"{form_disabled}>Add risk link</button>
         <div class="hint">Pick from the dropdown or type an ID / name.</div>
         <div class="form-status"></div>
       </form>
@@ -539,10 +603,10 @@ def project_detail(project_id):
 
       <h3 class="section-title">Linked architecture</h3>
       {"<ul class='linked-list'>" + "".join(arch_items) + "</ul>" if arch_items else "<p class='empty'>No linked architecture</p>"}
-      <form class="link-form" data-mode="from-project" data-project-id="{_esc(p['id'])}" data-linked-type="architecture">
-        <input type="text" name="item" list="arch-options" placeholder="Select or type an architecture item" autocomplete="off" />
-        <select name="relationship">{_relationship_options(ARCHITECTURE_RELATIONSHIPS)}</select>
-        <button type="submit">Add architecture link</button>
+      <form class="link-form{form_lock}" data-mode="from-project" data-project-id="{_esc(p['id'])}" data-linked-type="architecture">
+        <input type="text" name="item" list="arch-options" placeholder="Select or type an architecture item" autocomplete="off"{form_disabled} />
+        <select name="relationship"{form_disabled}>{_relationship_options(ARCHITECTURE_RELATIONSHIPS)}</select>
+        <button type="submit"{form_disabled}>Add architecture link</button>
         <div class="hint">Pick from the dropdown or type an ID / name.</div>
         <div class="form-status"></div>
       </form>
@@ -555,6 +619,7 @@ def project_detail(project_id):
         subtitle=f"Project detail · {p['id']}",
         styles=BASE_STYLES,
         nav=_nav("Projects"),
+        db_banner=_db_banner(status),
         back_href="/projects",
         back_label="← All projects",
         fields=fields,
@@ -569,6 +634,10 @@ def risk_detail(risk_id):
     if data is None:
         abort(404)
     r = data["risk"]
+    status = get_db_status()
+    writes_enabled = status["writes_enabled"]
+    form_lock = "" if writes_enabled else " writes-locked"
+    form_disabled = "" if writes_enabled else " disabled"
 
     linked_project_ids = {p["id"] for p in data["linked_projects"]}
     project_options = [
@@ -582,6 +651,7 @@ def risk_detail(risk_id):
             f"Relationship: {p['relationship']} · RAG {p['rag_status']}",
             p["edge_id"],
             f"{p['id']} {p['relationship']}",
+            writes_enabled=writes_enabled,
         )
         for p in data["linked_projects"]
     ]
@@ -598,10 +668,10 @@ def risk_detail(risk_id):
     linked = f"""
       <h3 class="section-title">Linked projects</h3>
       {"<ul class='linked-list'>" + "".join(project_items) + "</ul>" if project_items else "<p class='empty'>No linked projects</p>"}
-      <form class="link-form" data-mode="to-project" data-item-id="{_esc(r['id'])}" data-linked-type="risk">
-        <input type="text" name="item" list="project-options" placeholder="Select or type a project" autocomplete="off" />
-        <select name="relationship">{_relationship_options(RISK_RELATIONSHIPS)}</select>
-        <button type="submit">Add project link</button>
+      <form class="link-form{form_lock}" data-mode="to-project" data-item-id="{_esc(r['id'])}" data-linked-type="risk">
+        <input type="text" name="item" list="project-options" placeholder="Select or type a project" autocomplete="off"{form_disabled} />
+        <select name="relationship"{form_disabled}>{_relationship_options(RISK_RELATIONSHIPS)}</select>
+        <button type="submit"{form_disabled}>Add project link</button>
         <div class="hint">Pick from the dropdown or type an ID / name.</div>
         <div class="form-status"></div>
       </form>
@@ -614,6 +684,7 @@ def risk_detail(risk_id):
         subtitle=f"Risk detail · {r['id']}",
         styles=BASE_STYLES,
         nav=_nav("Risks"),
+        db_banner=_db_banner(status),
         back_href="/risks",
         back_label="← All risks",
         fields=fields,
@@ -630,6 +701,10 @@ def architecture_detail(architecture_id):
     if data is None:
         abort(404)
     a = data["architecture"]
+    status = get_db_status()
+    writes_enabled = status["writes_enabled"]
+    form_lock = "" if writes_enabled else " writes-locked"
+    form_disabled = "" if writes_enabled else " disabled"
 
     linked_project_ids = {p["id"] for p in data["linked_projects"]}
     project_options = [
@@ -643,6 +718,7 @@ def architecture_detail(architecture_id):
             f"Relationship: {p['relationship']} · RAG {p['rag_status']}",
             p["edge_id"],
             f"{p['id']} {p['relationship']}",
+            writes_enabled=writes_enabled,
         )
         for p in data["linked_projects"]
     ]
@@ -660,10 +736,10 @@ def architecture_detail(architecture_id):
     linked = f"""
       <h3 class="section-title">Linked projects</h3>
       {"<ul class='linked-list'>" + "".join(project_items) + "</ul>" if project_items else "<p class='empty'>No linked projects</p>"}
-      <form class="link-form" data-mode="to-project" data-item-id="{_esc(a['id'])}" data-linked-type="architecture">
-        <input type="text" name="item" list="project-options" placeholder="Select or type a project" autocomplete="off" />
-        <select name="relationship">{_relationship_options(ARCHITECTURE_RELATIONSHIPS)}</select>
-        <button type="submit">Add project link</button>
+      <form class="link-form{form_lock}" data-mode="to-project" data-item-id="{_esc(a['id'])}" data-linked-type="architecture">
+        <input type="text" name="item" list="project-options" placeholder="Select or type a project" autocomplete="off"{form_disabled} />
+        <select name="relationship"{form_disabled}>{_relationship_options(ARCHITECTURE_RELATIONSHIPS)}</select>
+        <button type="submit"{form_disabled}>Add project link</button>
         <div class="hint">Pick from the dropdown or type an ID / name.</div>
         <div class="form-status"></div>
       </form>
@@ -676,6 +752,7 @@ def architecture_detail(architecture_id):
         subtitle=f"Architecture detail · {a['id']}",
         styles=BASE_STYLES,
         nav=_nav("Architecture"),
+        db_banner=_db_banner(status),
         back_href="/architecture",
         back_label="← All architecture",
         fields=fields,
@@ -700,6 +777,7 @@ LIST_TEMPLATE = """
     <nav>{{ nav|safe }}</nav>
   </header>
   <main>
+    {{ db_banner|safe }}
     <div class="table-wrap">
       <table>
         <thead><tr>{{ table_head|safe }}</tr></thead>
@@ -727,6 +805,7 @@ DETAIL_TEMPLATE = """
     <nav>{{ nav|safe }}</nav>
   </header>
   <main>
+    {{ db_banner|safe }}
     <p style="margin-bottom:1rem"><a href="{{ back_href }}">{{ back_label }}</a></p>
     <section class="detail-card">
       <h2>{{ title }}</h2>

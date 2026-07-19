@@ -1,0 +1,17 @@
+# One-time Cloud Run admin token setup (do not commit the token).
+#
+#   export ADMIN_TOKEN='choose-a-long-random-string'
+#   gcloud run services update hello-world-dev --region=europe-west1 \
+#     --update-env-vars=ADMIN_TOKEN="$ADMIN_TOKEN"
+#   gcloud run services update hello-world --region=europe-west1 \
+#     --update-env-vars=ADMIN_TOKEN="$ADMIN_TOKEN"
+#
+# Then create scheduler jobs:
+#   bash scripts/setup-db-jobs.sh
+#
+# Cursor commands (from repo root):
+#   export ADMIN_TOKEN='...'
+#   python3 scripts/db_admin.py --env dev status
+#   python3 scripts/db_admin.py --env dev disable-writes
+#   python3 scripts/db_admin.py --env dev enable-writes
+#   python3 scripts/db_admin.py --env dev mark-safe

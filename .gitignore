@@ -1,5 +1,9 @@
 __pycache__/
 *.py[cod]
 app.db
+app.last-safe.db
+app.writes-enabled
+backups/
+.admin_token
 .venv/
 venv/

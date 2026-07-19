@@ -15,8 +15,8 @@ steps:
       - --region
       - ${_REGION}
       - --allow-unauthenticated
-      - --set-env-vars
-      - ENVIRONMENT=${_ENVIRONMENT},DATABASE_BUCKET=${PROJECT_ID}-hello-world-data
+      - --update-env-vars
+      - ENVIRONMENT=${_ENVIRONMENT},DATABASE_BUCKET=${PROJECT_ID}-hello-world-data-prod
 
 options:
   logging: CLOUD_LOGGING_ONLY

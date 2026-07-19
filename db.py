@@ -1,19 +1,47 @@
 """
 SQLite database for projects, risks, architecture components, and links.
 
-The database file is created/seeded locally. When DATABASE_BUCKET is set
-(Cloud Run), the file is loaded from and saved to Google Cloud Storage so
-edits survive restarts and new sessions.
+Each environment (local/dev/prod) uses its own database file. When
+DATABASE_BUCKET is set, the live DB plus control files are synced to that
+environment's GCS bucket.
 """
 
 import os
+import shutil
 import sqlite3
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
-DB_PATH = Path(os.environ.get("DATABASE_PATH", Path(__file__).parent / "app.db"))
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "local").strip() or "local"
 SCHEMA_VERSION = 4
-DATABASE_BUCKET = os.environ.get("DATABASE_BUCKET", "").strip()
+
+# Prefer explicit bucket; otherwise derive a per-environment default name when
+# running in GCP-style envs. Local keeps files on disk only unless overridden.
+_DEFAULT_BUCKET = {
+    "dev": os.environ.get("GOOGLE_CLOUD_PROJECT", "").strip()
+    and f"{os.environ.get('GOOGLE_CLOUD_PROJECT').strip()}-hello-world-data-dev",
+    "prod": os.environ.get("GOOGLE_CLOUD_PROJECT", "").strip()
+    and f"{os.environ.get('GOOGLE_CLOUD_PROJECT').strip()}-hello-world-data-prod",
+}.get(ENVIRONMENT, "")
+
+DATABASE_BUCKET = (
+    os.environ.get("DATABASE_BUCKET", "").strip() or _DEFAULT_BUCKET or ""
+)
+
+DB_PATH = Path(os.environ.get("DATABASE_PATH", Path(__file__).parent / "app.db"))
+LAST_SAFE_PATH = Path(
+    os.environ.get("LAST_SAFE_PATH", DB_PATH.with_name("app.last-safe.db"))
+)
+WRITES_FLAG_PATH = Path(
+    os.environ.get("WRITES_FLAG_PATH", DB_PATH.with_name("app.writes-enabled"))
+)
+BACKUPS_DIR = Path(os.environ.get("BACKUPS_DIR", DB_PATH.parent / "backups"))
+
+GCS_LIVE_OBJECT = "app.db"
+GCS_LAST_SAFE_OBJECT = "last-safe.db"
+GCS_WRITES_OBJECT = "writes-enabled"
+GCS_BACKUPS_PREFIX = "backups/"
 
 RISK_RELATIONSHIPS = ("resolves", "reduces")
 ARCHITECTURE_RELATIONSHIPS = (
@@ -38,36 +66,40 @@ def get_connection():
     return conn
 
 
-def _download_db_from_gcs():
+def _gcs_client_and_bucket():
     if not DATABASE_BUCKET:
-        return
+        return None, None
     try:
         from google.cloud import storage
     except ImportError:
-        return
-
+        return None, None
     try:
         client = storage.Client()
-        blob = client.bucket(DATABASE_BUCKET).blob("app.db")
+        return client, client.bucket(DATABASE_BUCKET)
+    except Exception as exc:
+        print(f"GCS unavailable: {exc}")
+        return None, None
+
+
+def _download_db_from_gcs():
+    client, bucket = _gcs_client_and_bucket()
+    if bucket is None:
+        return
+    try:
+        blob = bucket.blob(GCS_LIVE_OBJECT)
         if blob.exists():
             DB_PATH.parent.mkdir(parents=True, exist_ok=True)
             blob.download_to_filename(str(DB_PATH))
-    except Exception as exc:  # PoC: keep serving even if sync fails
+    except Exception as exc:
         print(f"GCS download skipped: {exc}")
 
 
 def _upload_db_to_gcs():
-    if not DATABASE_BUCKET:
+    client, bucket = _gcs_client_and_bucket()
+    if bucket is None:
         return
     try:
-        from google.cloud import storage
-    except ImportError:
-        return
-
-    try:
-        client = storage.Client()
-        blob = client.bucket(DATABASE_BUCKET).blob("app.db")
-        blob.upload_from_filename(str(DB_PATH))
+        bucket.blob(GCS_LIVE_OBJECT).upload_from_filename(str(DB_PATH))
     except Exception as exc:
         print(f"GCS upload skipped: {exc}")
 
@@ -75,6 +107,143 @@ def _upload_db_to_gcs():
 def persist_db():
     """Push the local SQLite file to GCS when configured."""
     _upload_db_to_gcs()
+
+
+def _read_writes_flag_local():
+    if not WRITES_FLAG_PATH.exists():
+        return True
+    return WRITES_FLAG_PATH.read_text(encoding="utf-8").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _write_writes_flag_local(enabled):
+    WRITES_FLAG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    WRITES_FLAG_PATH.write_text("true" if enabled else "false", encoding="utf-8")
+
+
+def get_writes_enabled():
+    """Whether mutating link edits are currently allowed."""
+    client, bucket = _gcs_client_and_bucket()
+    if bucket is not None:
+        try:
+            blob = bucket.blob(GCS_WRITES_OBJECT)
+            if blob.exists():
+                value = blob.download_as_text(encoding="utf-8").strip().lower()
+                return value in {"1", "true", "yes", "on"}
+        except Exception as exc:
+            print(f"GCS writes-flag read skipped: {exc}")
+    return _read_writes_flag_local()
+
+
+def set_writes_enabled(enabled):
+    """Cursor/admin only: allow or block database mutations from the app."""
+    enabled = bool(enabled)
+    _write_writes_flag_local(enabled)
+    client, bucket = _gcs_client_and_bucket()
+    if bucket is not None:
+        try:
+            bucket.blob(GCS_WRITES_OBJECT).upload_from_string(
+                "true" if enabled else "false",
+                content_type="text/plain",
+            )
+        except Exception as exc:
+            print(f"GCS writes-flag write skipped: {exc}")
+            return False, f"local updated; GCS sync failed: {exc}"
+    return True, "writes enabled" if enabled else "writes disabled"
+
+
+def has_last_safe():
+    if LAST_SAFE_PATH.exists():
+        return True
+    client, bucket = _gcs_client_and_bucket()
+    if bucket is None:
+        return False
+    try:
+        return bucket.blob(GCS_LAST_SAFE_OBJECT).exists()
+    except Exception:
+        return False
+
+
+def _snapshot_last_safe():
+    """Copy the current live DB file to the last-safe locations."""
+    if not DB_PATH.exists():
+        return False, "live database missing"
+    LAST_SAFE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(DB_PATH, LAST_SAFE_PATH)
+    client, bucket = _gcs_client_and_bucket()
+    if bucket is not None:
+        try:
+            bucket.blob(GCS_LAST_SAFE_OBJECT).upload_from_filename(str(LAST_SAFE_PATH))
+        except Exception as exc:
+            print(f"GCS last-safe upload skipped: {exc}")
+            return False, f"local last-safe saved; GCS sync failed: {exc}"
+    return True, "last-safe updated"
+
+
+def mark_last_safe():
+    """Cursor/admin only: snapshot the current DB as the last safe copy."""
+    init_db()
+    return _snapshot_last_safe()
+
+
+def restore_last_safe():
+    """Replace the live DB with the last safe copy for this environment."""
+    client, bucket = _gcs_client_and_bucket()
+    if bucket is not None:
+        try:
+            blob = bucket.blob(GCS_LAST_SAFE_OBJECT)
+            if blob.exists():
+                DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+                blob.download_to_filename(str(DB_PATH))
+                shutil.copy2(DB_PATH, LAST_SAFE_PATH)
+                persist_db()
+                return True, "restored from GCS last-safe"
+        except Exception as exc:
+            print(f"GCS last-safe restore failed: {exc}")
+
+    if not LAST_SAFE_PATH.exists():
+        return False, "no last-safe copy available"
+    shutil.copy2(LAST_SAFE_PATH, DB_PATH)
+    persist_db()
+    return True, "restored from local last-safe"
+
+
+def create_backup():
+    """Copy the live DB into a timestamped hourly backup location."""
+    init_db()
+    if not DB_PATH.exists():
+        return False, "live database missing", None
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    filename = f"app-{stamp}.db"
+    BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
+    local_backup = BACKUPS_DIR / filename
+    shutil.copy2(DB_PATH, local_backup)
+
+    client, bucket = _gcs_client_and_bucket()
+    if bucket is not None:
+        try:
+            bucket.blob(f"{GCS_BACKUPS_PREFIX}{filename}").upload_from_filename(
+                str(local_backup)
+            )
+        except Exception as exc:
+            print(f"GCS backup upload skipped: {exc}")
+            return False, f"local backup saved; GCS sync failed: {exc}", filename
+    return True, "backup created", filename
+
+
+def get_db_status():
+    init_db()
+    return {
+        "environment": ENVIRONMENT,
+        "writes_enabled": get_writes_enabled(),
+        "has_last_safe": has_last_safe(),
+        "database_bucket": DATABASE_BUCKET or None,
+    }
 
 
 def init_db():
@@ -172,6 +341,7 @@ def init_db():
             """
         )
 
+        seeded = False
         if current_version != SCHEMA_VERSION:
             _seed(conn)
             conn.execute(
@@ -181,7 +351,15 @@ def init_db():
                 """,
                 (str(SCHEMA_VERSION),),
             )
-            persist_db()
+            seeded = True
+
+    if seeded:
+        persist_db()
+        # Fresh seed becomes the baseline safe copy; writes start enabled.
+        set_writes_enabled(True)
+        _snapshot_last_safe()
+    elif not WRITES_FLAG_PATH.exists() and not DATABASE_BUCKET:
+        set_writes_enabled(True)
 
 
 def _seed(conn):
@@ -672,6 +850,9 @@ def _item_exists(conn, linked_type, linked_id):
 
 def add_link(project_id, linked_type, linked_id, relationship):
     """Create a persistent edge. Returns (ok, message, edge)."""
+    if not get_writes_enabled():
+        return False, "database changes are currently disabled", None
+
     if linked_type not in ("risk", "architecture"):
         return False, "linked_type must be risk or architecture", None
 
@@ -729,6 +910,9 @@ def add_link(project_id, linked_type, linked_id, relationship):
 
 def remove_link(edge_id):
     """Delete a persistent edge. Returns (ok, message)."""
+    if not get_writes_enabled():
+        return False, "database changes are currently disabled"
+
     init_db()
     with get_connection() as conn:
         row = conn.execute(
