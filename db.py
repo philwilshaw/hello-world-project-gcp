@@ -10,6 +10,7 @@ import sqlite3
 from pathlib import Path
 
 DB_PATH = Path(os.environ.get("DATABASE_PATH", Path(__file__).parent / "app.db"))
+SCHEMA_VERSION = 2
 
 
 def get_connection():
@@ -20,10 +21,32 @@ def get_connection():
 
 
 def init_db():
-    """Create tables and load mock data if the database is empty."""
+    """Create tables and load mock data; refresh when the schema version changes."""
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     with get_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            """
+        )
+        row = conn.execute(
+            "SELECT value FROM meta WHERE key = 'schema_version'"
+        ).fetchone()
+        current_version = int(row["value"]) if row else 0
+
+        if current_version != SCHEMA_VERSION:
+            conn.executescript(
+                """
+                DROP TABLE IF EXISTS edges;
+                DROP TABLE IF EXISTS risks;
+                DROP TABLE IF EXISTS projects;
+                """
+            )
+
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS projects (
@@ -52,16 +75,22 @@ def init_db():
                 id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL,
                 risk_id TEXT NOT NULL,
-                label TEXT NOT NULL DEFAULT 'exposed to',
+                relationship TEXT NOT NULL,
                 FOREIGN KEY (project_id) REFERENCES projects(id),
                 FOREIGN KEY (risk_id) REFERENCES risks(id)
             );
             """
         )
 
-        project_count = conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
-        if project_count == 0:
+        if current_version != SCHEMA_VERSION:
             _seed(conn)
+            conn.execute(
+                """
+                INSERT INTO meta (key, value) VALUES ('schema_version', ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (str(SCHEMA_VERSION),),
+            )
 
 
 def _seed(conn):
@@ -76,7 +105,7 @@ def _seed(conn):
             (
                 "p1",
                 "Website Redesign",
-                "Rebuild the public website with a clearer information architecture and faster load times.",
+                "Rebuild the public website to modernise brand presence and reduce reliance on outdated pages.",
                 "Aisha Khan",
                 "2026-03-01",
                 "2026-11-30",
@@ -87,7 +116,7 @@ def _seed(conn):
             (
                 "p2",
                 "Mobile App Launch",
-                "Ship the first customer mobile app for iOS and Android with account login and basic self-service.",
+                "Deliver a customer mobile app so routine requests can be handled without call-centre contact.",
                 "James O'Neill",
                 "2026-06-15",
                 "2027-04-30",
@@ -98,7 +127,7 @@ def _seed(conn):
             (
                 "p3",
                 "Data Migration",
-                "Move legacy finance records into the new cloud data platform with validated cutover.",
+                "Move finance records onto the cloud platform to remove fragile legacy reporting dependencies.",
                 "Priya Sharma",
                 "2026-09-01",
                 "2027-02-28",
@@ -117,63 +146,72 @@ def _seed(conn):
         [
             (
                 "r1",
-                "Budget Overrun",
-                "Delivery costs rise above the approved business case.",
-                "High — may force scope cuts or extra funding approval.",
-                "Near-term — cost pressure already visible in supplier quotes.",
-                "Estimated exposure around £75,000.",
+                "Outdated Digital Presence",
+                "Corporate website no longer reflects current products or accessibility standards.",
+                "High — damages trust and conversion across public channels.",
+                "Immediate — customer feedback already cites confusing content.",
+                "Estimated brand and conversion impact around £120,000 a year.",
             ),
             (
                 "r2",
-                "Schedule Slip",
-                "Key milestones move later than the agreed plan.",
-                "Medium — delays dependent releases and stakeholder confidence.",
-                "Medium-term — likely if design reviews overrun.",
-                "About six to eight weeks of programme delay.",
+                "Weak Customer Self-Service",
+                "Customers cannot complete common tasks online and default to phone support.",
+                "Medium — keeps operating cost and queue times elevated.",
+                "Near-term — volumes rise further during seasonal peaks.",
+                "Avoidable support cost estimated at £90,000 a year.",
             ),
             (
                 "r3",
-                "Key Person Dependency",
-                "Critical knowledge sits with a single specialist.",
-                "High — absence would stall mobile build work.",
-                "Ongoing while the specialist remains the only owner.",
-                "Hard to price; contingency cover roughly £20,000.",
+                "Critical Skills Concentration",
+                "Essential digital delivery knowledge sits with too few specialists.",
+                "High — absence would slow several corporate change programmes.",
+                "Ongoing until knowledge is shared and documented.",
+                "Contingency cover and delay exposure roughly £45,000.",
             ),
             (
                 "r4",
-                "Vendor Delay",
-                "External vendor misses contracted delivery dates.",
-                "Medium — blocks migration rehearsal windows.",
-                "Closer to cutover in early 2027.",
-                "Potential rework and standby costs near £35,000.",
+                "Fragile Legacy Finance Data",
+                "Core finance reporting depends on unsupported on-premise systems.",
+                "High — audit and decision-making risk if systems fail.",
+                "Closer to year-end reporting cycles in early 2027.",
+                "Potential remediation and audit cost near £150,000.",
             ),
         ],
     )
 
+    # Projects are delivered to address corporate risks.
+    # A risk can link to more than one project.
     conn.executemany(
         """
-        INSERT INTO edges (id, project_id, risk_id, label)
+        INSERT INTO edges (id, project_id, risk_id, relationship)
         VALUES (?, ?, ?, ?)
         """,
         [
-            ("e1", "p1", "r1", "exposed to"),
-            ("e2", "p1", "r2", "exposed to"),
-            ("e3", "p2", "r2", "exposed to"),
-            ("e4", "p2", "r3", "exposed to"),
-            ("e5", "p3", "r1", "exposed to"),
-            ("e6", "p3", "r4", "exposed to"),
+            ("e1", "p1", "r1", "resolves"),
+            ("e2", "p1", "r2", "reduces"),
+            ("e3", "p2", "r2", "resolves"),
+            ("e4", "p2", "r3", "reduces"),
+            ("e5", "p3", "r4", "resolves"),
+            ("e6", "p3", "r1", "reduces"),
         ],
     )
 
 
-def fetch_graph_elements():
-    """Return Cytoscape elements from edges plus the linked project/risk rows."""
+def fetch_timeline_data():
+    """Return projects, risks, and relationships for the timeline view."""
     init_db()
 
     with get_connection() as conn:
-        edges = conn.execute(
-            "SELECT id, project_id, risk_id, label FROM edges"
-        ).fetchall()
+        edges = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT id, project_id, risk_id, relationship
+                FROM edges
+                ORDER BY id
+                """
+            )
+        ]
 
         project_ids = {edge["project_id"] for edge in edges}
         risk_ids = {edge["risk_id"] for edge in edges}
@@ -181,64 +219,37 @@ def fetch_graph_elements():
         projects = []
         if project_ids:
             placeholders = ",".join("?" for _ in project_ids)
-            projects = conn.execute(
-                f"SELECT * FROM projects WHERE id IN ({placeholders})",
-                tuple(project_ids),
-            ).fetchall()
+            projects = [
+                dict(row)
+                for row in conn.execute(
+                    f"""
+                    SELECT *
+                    FROM projects
+                    WHERE id IN ({placeholders})
+                    ORDER BY start_date, id
+                    """,
+                    tuple(project_ids),
+                )
+            ]
 
         risks = []
         if risk_ids:
             placeholders = ",".join("?" for _ in risk_ids)
-            risks = conn.execute(
-                f"SELECT * FROM risks WHERE id IN ({placeholders})",
-                tuple(risk_ids),
-            ).fetchall()
+            risks = [
+                dict(row)
+                for row in conn.execute(
+                    f"""
+                    SELECT *
+                    FROM risks
+                    WHERE id IN ({placeholders})
+                    ORDER BY id
+                    """,
+                    tuple(risk_ids),
+                )
+            ]
 
-    elements = []
-
-    for project in projects:
-        elements.append(
-            {
-                "data": {
-                    "id": project["id"],
-                    "label": project["title"],
-                    "type": "project",
-                    "description": project["description"],
-                    "accountable_contact_name": project["accountable_contact_name"],
-                    "start_date": project["start_date"],
-                    "end_date": project["end_date"],
-                    "rag_status": project["rag_status"],
-                    "capex_gbp": project["capex_gbp"],
-                    "opex_gbp": project["opex_gbp"],
-                }
-            }
-        )
-
-    for risk in risks:
-        elements.append(
-            {
-                "data": {
-                    "id": risk["id"],
-                    "label": risk["title"],
-                    "type": "risk",
-                    "description": risk["description"],
-                    "impact": risk["impact"],
-                    "proximity": risk["proximity"],
-                    "value": risk["value"],
-                }
-            }
-        )
-
-    for edge in edges:
-        elements.append(
-            {
-                "data": {
-                    "id": edge["id"],
-                    "source": edge["project_id"],
-                    "target": edge["risk_id"],
-                    "label": edge["label"],
-                }
-            }
-        )
-
-    return elements
+    return {
+        "projects": projects,
+        "risks": risks,
+        "edges": edges,
+    }
