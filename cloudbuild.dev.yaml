@@ -5,31 +5,18 @@ substitutions:
 
 steps:
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
+    entrypoint: gcloud
     args:
-      - -c
-      - |
-        set -eu
-        BUCKET="${PROJECT_ID}-hello-world-data"
-        echo "Ensuring bucket gs://$${BUCKET} exists..."
-        gcloud storage buckets describe "gs://$${BUCKET}" >/dev/null 2>&1 || \
-          gcloud storage buckets create "gs://$${BUCKET}" --location="${_REGION}" --uniform-bucket-level-access || \
-          echo "Bucket create skipped/failed; continuing deploy"
-
-        PROJECT_NUMBER="$$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
-        SA="$${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-        echo "Granting objectAdmin on bucket to $${SA}..."
-        gcloud storage buckets add-iam-policy-binding "gs://$${BUCKET}" \
-          --member="serviceAccount:$${SA}" \
-          --role="roles/storage.objectAdmin" || \
-          echo "IAM bind skipped/failed; continuing deploy"
-
-        echo "Deploying Cloud Run service ${_SERVICE_NAME}..."
-        gcloud run deploy "${_SERVICE_NAME}" \
-          --source=. \
-          --region="${_REGION}" \
-          --allow-unauthenticated \
-          --set-env-vars="ENVIRONMENT=${_ENVIRONMENT},DATABASE_BUCKET=$${BUCKET}"
+      - run
+      - deploy
+      - ${_SERVICE_NAME}
+      - --source
+      - .
+      - --region
+      - ${_REGION}
+      - --allow-unauthenticated
+      - --set-env-vars
+      - ENVIRONMENT=${_ENVIRONMENT},DATABASE_BUCKET=${PROJECT_ID}-hello-world-data
 
 options:
   logging: CLOUD_LOGGING_ONLY
