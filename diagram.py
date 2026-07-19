@@ -1,9 +1,9 @@
 """
-Interactive project–risk timeline demo.
+Interactive project timeline demo.
 
-Reads projects, risks, and edges from SQLite, then renders:
-  - projects as RAG-coloured bars on a timeline
-  - linked corporate risks as diamonds at the right side of each project
+Reads projects, risks, architecture components, and edges from SQLite, then
+renders projects as RAG bars with linked risks (diamonds) and architecture
+impacts (triangles) on the right of each bar.
 """
 
 from flask import Blueprint, jsonify, render_template_string
@@ -19,16 +19,16 @@ DIAGRAM_HTML = r"""
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Project–Risk Timeline</title>
+  <title>Project Impact Timeline</title>
   <style>
     :root {
       --bg: #10151c;
-      --panel: #182230;
       --text: #eef3f8;
       --muted: #8fa0b5;
       --line: #2b3a4d;
       --accent: #7dd3c0;
       --risk: #d7dee8;
+      --arch: #8eb6ff;
       --rag-green: #2f9e6b;
       --rag-amber: #d4a017;
       --rag-red: #c94c3f;
@@ -71,6 +71,28 @@ DIAGRAM_HTML = r"""
       font-size: 0.85rem;
     }
 
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem 1.25rem;
+      padding: 0.85rem 1.5rem 0.35rem;
+      color: var(--muted);
+      font-size: 0.82rem;
+      border-bottom: 1px solid rgba(43, 58, 77, 0.55);
+    }
+
+    .controls label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .controls input {
+      accent-color: var(--accent);
+    }
+
     .legend {
       display: flex;
       flex-wrap: wrap;
@@ -97,6 +119,17 @@ DIAGRAM_HTML = r"""
       background: var(--risk);
     }
 
+    .swatch.triangle {
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-bottom: 11px solid var(--arch);
+      background: transparent;
+      border-radius: 0;
+      vertical-align: -2px;
+    }
+
     .swatch.green { background: var(--rag-green); }
     .swatch.amber { background: var(--rag-amber); }
     .swatch.red { background: var(--rag-red); }
@@ -107,7 +140,7 @@ DIAGRAM_HTML = r"""
     }
 
     #timeline {
-      min-width: 920px;
+      min-width: 960px;
       position: relative;
     }
 
@@ -141,7 +174,7 @@ DIAGRAM_HTML = r"""
       grid-template-columns: 220px 1fr;
       gap: 0.75rem;
       align-items: stretch;
-      min-height: 108px;
+      min-height: 120px;
       margin-bottom: 0.85rem;
       transition: opacity 180ms ease;
     }
@@ -165,7 +198,7 @@ DIAGRAM_HTML = r"""
       background: rgba(255, 255, 255, 0.02);
       border: 1px solid rgba(255, 255, 255, 0.04);
       border-radius: 8px;
-      min-height: 108px;
+      min-height: 120px;
     }
 
     .project-bar {
@@ -197,27 +230,69 @@ DIAGRAM_HTML = r"""
     .project-bar.rag-amber { background: linear-gradient(180deg, #e0b02a, var(--rag-amber)); }
     .project-bar.rag-red { background: linear-gradient(180deg, #dc5d4f, var(--rag-red)); }
 
-    .risk-marker {
+    .impact-marker {
       position: absolute;
-      top: 34px;
-      width: 18px;
-      height: 18px;
-      transform: translate(-50%, 0) rotate(45deg);
-      background: var(--risk);
-      border: 2px solid #10151c;
+      width: 24px;
+      height: 24px;
+      transform: translate(-50%, 0);
       cursor: pointer;
       z-index: 3;
-      transition: opacity 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+      transition: opacity 180ms ease, filter 180ms ease;
     }
 
-    .risk-marker:hover,
-    .risk-marker.selected {
-      box-shadow: 0 0 0 3px rgba(125, 211, 192, 0.55);
-    }
-
-    .risk-label {
+    .impact-marker .shape {
       position: absolute;
-      top: 30px;
+      inset: 0;
+      display: grid;
+      place-items: center;
+    }
+
+    .impact-marker .glyph {
+      position: relative;
+      z-index: 1;
+      font-size: 0.68rem;
+      font-weight: 750;
+      line-height: 1;
+      color: #10151c;
+      pointer-events: none;
+    }
+
+    .impact-marker.risk .shape-visual {
+      width: 16px;
+      height: 16px;
+      background: var(--risk);
+      border: 2px solid #10151c;
+      transform: rotate(45deg);
+    }
+
+    .impact-marker.risk .glyph {
+      transform: translateY(0.5px);
+    }
+
+    .impact-marker.architecture .shape-visual {
+      width: 0;
+      height: 0;
+      border-left: 11px solid transparent;
+      border-right: 11px solid transparent;
+      border-bottom: 18px solid var(--arch);
+      filter: drop-shadow(0 0 0 #10151c);
+    }
+
+    .impact-marker.architecture .glyph {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #10151c;
+    }
+
+    .impact-marker:hover,
+    .impact-marker.selected {
+      filter: drop-shadow(0 0 4px rgba(125, 211, 192, 0.8));
+    }
+
+    .impact-label {
+      position: absolute;
       z-index: 2;
       max-width: 150px;
       font-size: 0.68rem;
@@ -227,28 +302,34 @@ DIAGRAM_HTML = r"""
       transition: opacity 180ms ease;
     }
 
-    .risk-label .rid {
+    .impact-label .iid {
       color: var(--accent);
       font-weight: 650;
     }
 
-    .risk-label.side-right { text-align: left; }
-    .risk-label.side-left { text-align: right; }
+    .impact-label.side-right { text-align: left; }
+    .impact-label.side-left { text-align: right; }
 
     .faded {
       opacity: 0.18 !important;
       filter: grayscale(0.35);
     }
 
-    .risk-marker.faded,
-    .risk-label.faded {
+    .impact-marker.faded,
+    .impact-label.faded,
+    .project-bar.faded {
       opacity: 0.22 !important;
     }
 
-    .risk-marker.selected,
-    .risk-label.selected {
+    .impact-marker.selected,
+    .impact-label.selected,
+    .project-bar.selected {
       opacity: 1 !important;
       filter: none;
+    }
+
+    .hidden-layer {
+      display: none !important;
     }
 
     .hint {
@@ -260,23 +341,30 @@ DIAGRAM_HTML = r"""
 </head>
 <body>
   <header>
-    <h1>Project–Risk Timeline</h1>
-    <p>Projects address corporate risks · bars coloured by RAG · diamonds show linked risks</p>
+    <h1>Project Impact Timeline</h1>
+    <p>Projects address corporate risks and change architecture components</p>
     <a href="/">← Home</a>
   </header>
+
+  <div class="controls">
+    <label><input type="checkbox" id="toggle-projects" checked /> Projects</label>
+    <label><input type="checkbox" id="toggle-risks" checked /> Risks</label>
+    <label><input type="checkbox" id="toggle-architecture" checked /> Architecture impacts</label>
+  </div>
 
   <div class="legend">
     <span><i class="swatch green"></i>Green</span>
     <span><i class="swatch amber"></i>Amber</span>
     <span><i class="swatch red"></i>Red</span>
-    <span><i class="swatch diamond"></i>Corporate risk</span>
+    <span><i class="swatch diamond"></i>Risk (R)</span>
+    <span><i class="swatch triangle"></i>Architecture (A)</span>
   </div>
 
   <div class="timeline-wrap">
     <div id="timeline"></div>
   </div>
 
-  <p class="hint">Click a risk diamond or label to highlight every instance of that risk and its linked projects. Click again or elsewhere to clear.</p>
+  <p class="hint">Click a risk or architecture marker to highlight every instance and its linked projects. Click again or elsewhere to clear. Use the checkboxes to show or hide layers.</p>
 
   <script>
     const RAG_CLASS = {
@@ -320,6 +408,9 @@ DIAGRAM_HTML = r"""
     function renderTimeline(data) {
       const root = document.getElementById("timeline");
       const risksById = Object.fromEntries(data.risks.map((r) => [r.id, r]));
+      const archById = Object.fromEntries(
+        data.architecture_components.map((a) => [a.id, a])
+      );
       const edgesByProject = {};
       for (const edge of data.edges) {
         (edgesByProject[edge.project_id] ||= []).push(edge);
@@ -328,7 +419,7 @@ DIAGRAM_HTML = r"""
       const allStarts = data.projects.map((p) => parseDate(p.start_date));
       const allEnds = data.projects.map((p) => parseDate(p.end_date));
       const rangeStart = Math.min(...allStarts) - 20 * 24 * 3600 * 1000;
-      const rangeEnd = Math.max(...allEnds) + 70 * 24 * 3600 * 1000;
+      const rangeEnd = Math.max(...allEnds) + 90 * 24 * 3600 * 1000;
 
       const axis = document.createElement("div");
       axis.className = "axis";
@@ -346,15 +437,17 @@ DIAGRAM_HTML = r"""
       }
       root.appendChild(axis);
 
-      let selectedRiskId = null;
+      let selected = null; // { type, id }
 
       function applySelection() {
         const rows = [...root.querySelectorAll(".row")];
-        const markers = [...root.querySelectorAll(".risk-marker")];
-        const labels = [...root.querySelectorAll(".risk-label")];
+        const bars = [...root.querySelectorAll(".project-bar")];
+        const markers = [...root.querySelectorAll(".impact-marker")];
+        const labels = [...root.querySelectorAll(".impact-label")];
 
-        if (!selectedRiskId) {
+        if (!selected) {
           rows.forEach((el) => el.classList.remove("faded"));
+          bars.forEach((el) => el.classList.remove("selected", "faded"));
           markers.forEach((el) => el.classList.remove("selected", "faded"));
           labels.forEach((el) => el.classList.remove("selected", "faded"));
           return;
@@ -362,30 +455,68 @@ DIAGRAM_HTML = r"""
 
         const linkedProjects = new Set(
           data.edges
-            .filter((e) => e.risk_id === selectedRiskId)
+            .filter(
+              (e) =>
+                e.linked_type === selected.type && e.linked_id === selected.id
+            )
             .map((e) => e.project_id)
         );
 
         rows.forEach((row) => {
-          row.classList.toggle("faded", !linkedProjects.has(row.dataset.projectId));
+          row.classList.toggle(
+            "faded",
+            !linkedProjects.has(row.dataset.projectId)
+          );
+        });
+
+        bars.forEach((el) => {
+          const match = linkedProjects.has(el.dataset.projectId);
+          el.classList.toggle("selected", match);
+          el.classList.toggle("faded", !match);
         });
 
         markers.forEach((el) => {
-          const match = el.dataset.riskId === selectedRiskId;
+          const match =
+            el.dataset.linkedType === selected.type &&
+            el.dataset.linkedId === selected.id;
           el.classList.toggle("selected", match);
           el.classList.toggle("faded", !match);
         });
 
         labels.forEach((el) => {
-          const match = el.dataset.riskId === selectedRiskId;
+          const match =
+            el.dataset.linkedType === selected.type &&
+            el.dataset.linkedId === selected.id;
           el.classList.toggle("selected", match);
           el.classList.toggle("faded", !match);
         });
       }
 
-      function toggleRisk(riskId) {
-        selectedRiskId = selectedRiskId === riskId ? null : riskId;
+      function toggleItem(type, id) {
+        if (selected && selected.type === type && selected.id === id) {
+          selected = null;
+        } else {
+          selected = { type, id };
+        }
         applySelection();
+      }
+
+      function applyVisibility() {
+        const showProjects = document.getElementById("toggle-projects").checked;
+        const showRisks = document.getElementById("toggle-risks").checked;
+        const showArch = document.getElementById("toggle-architecture").checked;
+
+        root.querySelectorAll(".project-bar").forEach((el) => {
+          el.classList.toggle("hidden-layer", !showProjects);
+        });
+        root.querySelectorAll('.impact-marker.risk, .impact-label.risk').forEach((el) => {
+          el.classList.toggle("hidden-layer", !showRisks);
+        });
+        root.querySelectorAll(
+          ".impact-marker.architecture, .impact-label.architecture"
+        ).forEach((el) => {
+          el.classList.toggle("hidden-layer", !showArch);
+        });
       }
 
       for (const project of data.projects) {
@@ -407,6 +538,7 @@ DIAGRAM_HTML = r"""
 
         const bar = document.createElement("div");
         bar.className = `project-bar ${RAG_CLASS[project.rag_status] || "rag-amber"}`;
+        bar.dataset.projectId = project.id;
         bar.style.left = left + "%";
         bar.style.width = Math.max(width, 8) + "%";
         bar.innerHTML = `
@@ -422,52 +554,73 @@ DIAGRAM_HTML = r"""
 
         const linked = edgesByProject[project.id] || [];
         linked.forEach((edge, index) => {
-          const risk = risksById[edge.risk_id];
-          if (!risk) return;
+          const isRisk = edge.linked_type === "risk";
+          const item = isRisk
+            ? risksById[edge.linked_id]
+            : archById[edge.linked_id];
+          if (!item) return;
 
-          // Place diamonds just past the right edge of the project bar.
-          const markerLeft = left + Math.max(width, 8) + 2.2 + index * 0.15;
-          const side = markerLeft > 78 ? "left" : "right";
-          const labelOffset = side === "right" ? 1.6 : -1.6;
+          const markerLeft = left + Math.max(width, 8) + 2.4 + index * 0.2;
+          const side = markerLeft > 76 ? "left" : "right";
+          const labelOffset = side === "right" ? 1.7 : -1.7;
+          const top = 22 + index * 24;
 
           const marker = document.createElement("div");
-          marker.className = "risk-marker";
-          marker.dataset.riskId = risk.id;
+          marker.className = `impact-marker ${edge.linked_type}`;
+          marker.dataset.linkedType = edge.linked_type;
+          marker.dataset.linkedId = item.id;
           marker.dataset.edgeId = edge.id;
           marker.style.left = markerLeft + "%";
-          marker.style.top = 28 + index * 22 + "px";
-          marker.title = `${risk.id}: ${risk.title} (${edge.relationship})`;
+          marker.style.top = top + "px";
+          marker.title = `${item.id}: ${item.title} (${edge.relationship})`;
+          marker.innerHTML = isRisk
+            ? `<div class="shape"><div class="shape-visual"></div><span class="glyph">R</span></div>`
+            : `<div class="shape"><div class="shape-visual"></div><span class="glyph">A</span></div>`;
           marker.addEventListener("click", (evt) => {
             evt.stopPropagation();
-            toggleRisk(risk.id);
+            toggleItem(edge.linked_type, item.id);
           });
 
-          const riskLabel = document.createElement("div");
-          riskLabel.className = `risk-label side-${side}`;
-          riskLabel.dataset.riskId = risk.id;
-          riskLabel.style.left = markerLeft + labelOffset + "%";
-          riskLabel.style.top = 26 + index * 22 + "px";
+          const impactLabel = document.createElement("div");
+          impactLabel.className = `impact-label ${edge.linked_type} side-${side}`;
+          impactLabel.dataset.linkedType = edge.linked_type;
+          impactLabel.dataset.linkedId = item.id;
+          impactLabel.style.left = markerLeft + labelOffset + "%";
+          impactLabel.style.top = top - 2 + "px";
           if (side === "left") {
-            riskLabel.style.transform = "translateX(-100%)";
+            impactLabel.style.transform = "translateX(-100%)";
           }
-          riskLabel.innerHTML = `<span class="rid">${risk.id}</span> ${risk.title}<br /><span style="color:var(--muted)">${edge.relationship}</span>`;
-          riskLabel.addEventListener("click", (evt) => {
+          impactLabel.innerHTML = `<span class="iid">${item.id}</span> ${item.title}<br /><span style="color:var(--muted)">${edge.relationship}</span>`;
+          impactLabel.addEventListener("click", (evt) => {
             evt.stopPropagation();
-            toggleRisk(risk.id);
+            toggleItem(edge.linked_type, item.id);
           });
 
           track.appendChild(marker);
-          track.appendChild(riskLabel);
+          track.appendChild(impactLabel);
         });
+
+        // Grow the track if many impacts stack vertically.
+        const neededHeight = 22 + linked.length * 24 + 28;
+        track.style.minHeight = Math.max(120, neededHeight) + "px";
+        row.style.minHeight = Math.max(120, neededHeight) + "px";
 
         row.appendChild(label);
         row.appendChild(track);
         root.appendChild(row);
       }
 
+      ["toggle-projects", "toggle-risks", "toggle-architecture"].forEach((id) => {
+        document.getElementById(id).addEventListener("change", (evt) => {
+          evt.stopPropagation();
+          applyVisibility();
+        });
+      });
+      applyVisibility();
+
       document.body.addEventListener("click", () => {
-        if (selectedRiskId) {
-          selectedRiskId = null;
+        if (selected) {
+          selected = null;
           applySelection();
         }
       });

@@ -1,5 +1,5 @@
 """
-SQLite database for projects, risks, and edges.
+SQLite database for projects, risks, architecture components, and links.
 
 Tables are created and seeded on first use so the demo works locally
 and on Cloud Run without a separate database service.
@@ -10,7 +10,7 @@ import sqlite3
 from pathlib import Path
 
 DB_PATH = Path(os.environ.get("DATABASE_PATH", Path(__file__).parent / "app.db"))
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def get_connection():
@@ -42,6 +42,7 @@ def init_db():
             conn.executescript(
                 """
                 DROP TABLE IF EXISTS edges;
+                DROP TABLE IF EXISTS architecture_components;
                 DROP TABLE IF EXISTS risks;
                 DROP TABLE IF EXISTS projects;
                 """
@@ -71,13 +72,23 @@ def init_db():
                 value TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS architecture_components (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                component_type TEXT NOT NULL,
+                owner TEXT NOT NULL
+            );
+
+            -- Links projects to risks or architecture components.
+            -- linked_type is 'risk' or 'architecture'.
             CREATE TABLE IF NOT EXISTS edges (
                 id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL,
-                risk_id TEXT NOT NULL,
+                linked_type TEXT NOT NULL,
+                linked_id TEXT NOT NULL,
                 relationship TEXT NOT NULL,
-                FOREIGN KEY (project_id) REFERENCES projects(id),
-                FOREIGN KEY (risk_id) REFERENCES risks(id)
+                FOREIGN KEY (project_id) REFERENCES projects(id)
             );
             """
         )
@@ -179,26 +190,94 @@ def _seed(conn):
         ],
     )
 
-    # Projects are delivered to address corporate risks.
-    # A risk can link to more than one project.
     conn.executemany(
         """
-        INSERT INTO edges (id, project_id, risk_id, relationship)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO architecture_components (
+            id, title, description, component_type, owner
+        ) VALUES (?, ?, ?, ?, ?)
         """,
         [
-            ("e1", "p1", "r1", "resolves"),
-            ("e2", "p1", "r2", "reduces"),
-            ("e3", "p2", "r2", "resolves"),
-            ("e4", "p2", "r3", "reduces"),
-            ("e5", "p3", "r4", "resolves"),
-            ("e6", "p3", "r1", "reduces"),
+            (
+                "a1",
+                "Public Website",
+                "Customer-facing web presence and content delivery stack.",
+                "Application",
+                "Digital Channels",
+            ),
+            (
+                "a2",
+                "Mobile Banking App",
+                "iOS and Android app for authenticated customer journeys.",
+                "Application",
+                "Digital Channels",
+            ),
+            (
+                "a3",
+                "Customer API Gateway",
+                "API layer used by web and mobile channels.",
+                "Integration",
+                "Platform Engineering",
+            ),
+            (
+                "a4",
+                "Legacy Finance Ledger",
+                "On-premise finance system due to be retired after migration.",
+                "System",
+                "Finance Technology",
+            ),
+            (
+                "a5",
+                "Cloud Finance Warehouse",
+                "Target cloud data platform for finance reporting.",
+                "Data Platform",
+                "Data Engineering",
+            ),
+        ],
+    )
+
+    conn.executemany(
+        """
+        INSERT INTO edges (id, project_id, linked_type, linked_id, relationship)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        [
+            # Risk links
+            ("e1", "p1", "risk", "r1", "resolves"),
+            ("e2", "p1", "risk", "r2", "reduces"),
+            ("e3", "p2", "risk", "r2", "resolves"),
+            ("e4", "p2", "risk", "r3", "reduces"),
+            ("e5", "p3", "risk", "r4", "resolves"),
+            ("e6", "p3", "risk", "r1", "reduces"),
+            # Architecture links
+            ("e7", "p1", "architecture", "a1", "modified"),
+            ("e8", "p1", "architecture", "a3", "version upgrade"),
+            ("e9", "p2", "architecture", "a2", "implemented"),
+            ("e10", "p2", "architecture", "a3", "modified"),
+            ("e11", "p3", "architecture", "a4", "decommissioned"),
+            ("e12", "p3", "architecture", "a5", "implemented"),
         ],
     )
 
 
+def _fetch_by_ids(conn, table, ids):
+    if not ids:
+        return []
+    placeholders = ",".join("?" for _ in ids)
+    return [
+        dict(row)
+        for row in conn.execute(
+            f"""
+            SELECT * FROM {table}
+            WHERE id IN ({placeholders})
+            ORDER BY id
+            """,
+            tuple(ids),
+        )
+    ]
+
+
 def fetch_timeline_data():
-    """Return projects, risks, and relationships for the timeline view."""
+    """Return projects, risks, architecture components, and links for the timeline."""
     init_db()
 
     with get_connection() as conn:
@@ -206,7 +285,7 @@ def fetch_timeline_data():
             dict(row)
             for row in conn.execute(
                 """
-                SELECT id, project_id, risk_id, relationship
+                SELECT id, project_id, linked_type, linked_id, relationship
                 FROM edges
                 ORDER BY id
                 """
@@ -214,7 +293,14 @@ def fetch_timeline_data():
         ]
 
         project_ids = {edge["project_id"] for edge in edges}
-        risk_ids = {edge["risk_id"] for edge in edges}
+        risk_ids = {
+            edge["linked_id"] for edge in edges if edge["linked_type"] == "risk"
+        }
+        architecture_ids = {
+            edge["linked_id"]
+            for edge in edges
+            if edge["linked_type"] == "architecture"
+        }
 
         projects = []
         if project_ids:
@@ -232,24 +318,14 @@ def fetch_timeline_data():
                 )
             ]
 
-        risks = []
-        if risk_ids:
-            placeholders = ",".join("?" for _ in risk_ids)
-            risks = [
-                dict(row)
-                for row in conn.execute(
-                    f"""
-                    SELECT *
-                    FROM risks
-                    WHERE id IN ({placeholders})
-                    ORDER BY id
-                    """,
-                    tuple(risk_ids),
-                )
-            ]
+        risks = _fetch_by_ids(conn, "risks", risk_ids)
+        architecture_components = _fetch_by_ids(
+            conn, "architecture_components", architecture_ids
+        )
 
     return {
         "projects": projects,
         "risks": risks,
+        "architecture_components": architecture_components,
         "edges": edges,
     }
