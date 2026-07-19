@@ -104,9 +104,10 @@ def hello():
     <span>Bucket: <strong>{status["database_bucket"] or "local file only"}</strong></span>
   </div>
   <p class="note">
-    This environment has its own database. It is backed up hourly and reset to the
-    last safe copy every night at midnight (Europe/London). Demo edits are temporary
-    unless a new last-safe snapshot is created from Cursor.
+    This environment has its own database, with restore-to-last-safe available from
+    this page. Hourly backup and midnight reset jobs are built into the app, but the
+    Cloud Scheduler setup is still outstanding. Demo edits should be treated as
+    temporary unless a new last-safe snapshot is created from Cursor.
   </p>
   <p style="margin:0.85rem 0 0.35rem">
     <button id="restore-btn" type="button" {"disabled" if not status["has_last_safe"] else ""}>
@@ -182,6 +183,26 @@ def hello():
 <li>Granted the build service the permissions needed to deploy to Cloud Run</li>
 </ul>
 
+<h3>8. Built an interactive project, risk, and architecture demo</h3>
+<ul>
+<li>Added a SQLite database with tables for projects, corporate risks, architecture components, and relationship edges</li>
+<li>Seeded realistic sample data, including project costs, RAG status, risk impact fields, and architecture outlook/capability</li>
+<li>Created a project impact timeline with quarterly banding, RAG-coloured bars, risk diamonds, and architecture triangles</li>
+<li>Added table pages and detail pages for projects, risks, and architecture, with click-through navigation between linked items</li>
+<li>Made links editable from detail pages using a typeable dropdown, with remove buttons and confirmation dialogs</li>
+<li>Built architecture views: relationship diagram, capability grouping, and a year-based architecture roadmap timeline</li>
+<li>Grouped the architecture roadmap by capability and marked project go-lives with stars showing impact type</li>
+</ul>
+
+<h3>9. Added environment-aware database controls</h3>
+<ul>
+<li>Split dev and prod onto separate database buckets so environments no longer share one data file</li>
+<li>Added restore-to-last-safe from the homepage for the current environment only</li>
+<li>Added Cursor-only admin commands to mark a last-safe snapshot and to enable or disable database writes</li>
+<li>Show write-lock status in the app and grey out / disable mutating controls when changes are locked</li>
+<li>Prepared backup and midnight-reset endpoints, plus a saved setup prompt for finishing Cloud Scheduler later</li>
+</ul>
+
 <hr>
 
 <h2>🧠 What I built (big picture)</h2>
@@ -195,6 +216,9 @@ A working cloud system combining:
 <li>Serverless deployment (Cloud Run)</li>
 <li>Automated builds triggered by code changes</li>
 <li>Separate development and production environments</li>
+<li>A SQLite-backed demo data model for projects, risks, and architecture</li>
+<li>Interactive timelines, catalogs, architecture diagrams, and roadmap views</li>
+<li>Environment-specific data storage with restore and write-lock controls</li>
 </ul>
 
 <hr>
@@ -214,6 +238,9 @@ A working cloud system combining:
 <li>Understanding DNS and domain configuration</li>
 <li>Configuring build triggers and connecting a repository to the cloud platform</li>
 <li>Resolving service account and permission issues for automated deployments</li>
+<li>Designing a simple data model and keeping sample relationships consistent across pages</li>
+<li>Working out how ephemeral Cloud Run storage differs from durable database storage</li>
+<li>Separating demo editability from Cursor-only admin controls</li>
 </ul>
 
 <hr>
@@ -229,6 +256,9 @@ A working cloud system combining:
 <li>How permissions and billing affect cloud systems</li>
 <li>How branch-based workflows support safe testing before production releases</li>
 <li>How environment variables distinguish development from production deployments</li>
+<li>How SQLite can power a small interactive demo before moving to a fuller database setup</li>
+<li>How timelines and architecture views can be driven from the same underlying tables and edges</li>
+<li>How admin actions can be kept out of the public UI while still being controllable from Cursor</li>
 </ul>
 
 <hr>
@@ -246,9 +276,22 @@ I started with no experience and now I can:
 <li>Use Git and GitHub confidently</li>
 <li>Test changes in a development environment before releasing to production</li>
 <li>Let automated builds deploy my app when I push code</li>
+<li>Grow a hello-world app into a multi-page interactive demo with real sample data</li>
+<li>Iterate quickly with Cursor while keeping environment-specific cloud deployments working</li>
 </ul>
 
-<p><strong>This project represents my first complete end-to-end cloud deployment, with separate development and production environments.</strong></p>
+<p><strong>This project represents my first complete end-to-end cloud deployment, with separate development and production environments, plus an interactive project/risk/architecture demo on top.</strong></p>
+
+<hr>
+
+<h2>🚧 Still to do</h2>
+<ul>
+<li><strong>Vanity URL</strong> — map a clean custom domain to the Cloud Run service</li>
+<li><strong>Database backup scheduled jobs</strong> — finish Cloud Scheduler setup for hourly backups and midnight reset-to-last-safe (prompt saved in <code>scripts/tomorrow-scheduler-setup-prompt.txt</code>)</li>
+<li><strong>Admin token and bucket permissions</strong> — set <code>ADMIN_TOKEN</code> on Cloud Run and confirm each environment can read/write its own GCS database bucket</li>
+<li><strong>Mark and manage last-safe snapshots from Cursor</strong> — use the admin commands day to day once the token/jobs setup is complete</li>
+<li><strong>Excel-driven schema and sample data</strong> — use a 3-tab Excel workbook as the source for project, risk, and architecture column headings and sample rows; ignore marked columns; honour allowed-value notes above the table; regenerate edges; and provide a downloadable sample workbook to share</li>
+</ul>
 
 <script>
   const restoreBtn = document.getElementById("restore-btn");
