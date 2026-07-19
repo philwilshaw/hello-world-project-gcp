@@ -5,18 +5,28 @@ substitutions:
 
 steps:
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
+    entrypoint: bash
     args:
-      - run
-      - deploy
-      - ${_SERVICE_NAME}
-      - --source
-      - .
-      - --region
-      - ${_REGION}
-      - --allow-unauthenticated
-      - --set-env-vars
-      - ENVIRONMENT=${_ENVIRONMENT}
+      - -c
+      - |
+        set -euo pipefail
+        BUCKET="${PROJECT_ID}-hello-world-data"
+        if ! gcloud storage buckets describe "gs://$${BUCKET}" >/dev/null 2>&1; then
+          gcloud storage buckets create "gs://$${BUCKET}" \
+            --location="${_REGION}" \
+            --uniform-bucket-level-access
+        fi
+        PROJECT_NUMBER="$$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
+        SA="$${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+        gcloud storage buckets add-iam-policy-binding "gs://$${BUCKET}" \
+          --member="serviceAccount:$${SA}" \
+          --role="roles/storage.objectAdmin" \
+          >/dev/null
+        gcloud run deploy "${_SERVICE_NAME}" \
+          --source=. \
+          --region="${_REGION}" \
+          --allow-unauthenticated \
+          --set-env-vars="ENVIRONMENT=${_ENVIRONMENT},DATABASE_BUCKET=$${BUCKET}"
 
 options:
   logging: CLOUD_LOGGING_ONLY

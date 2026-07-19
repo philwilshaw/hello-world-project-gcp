@@ -1,16 +1,27 @@
 """
 SQLite database for projects, risks, architecture components, and links.
 
-Tables are created and seeded on first use so the demo works locally
-and on Cloud Run without a separate database service.
+The database file is created/seeded locally. When DATABASE_BUCKET is set
+(Cloud Run), the file is loaded from and saved to Google Cloud Storage so
+edits survive restarts and new sessions.
 """
 
 import os
 import sqlite3
+import uuid
 from pathlib import Path
 
 DB_PATH = Path(os.environ.get("DATABASE_PATH", Path(__file__).parent / "app.db"))
 SCHEMA_VERSION = 3
+DATABASE_BUCKET = os.environ.get("DATABASE_BUCKET", "").strip()
+
+RISK_RELATIONSHIPS = ("resolves", "reduces")
+ARCHITECTURE_RELATIONSHIPS = (
+    "implemented",
+    "modified",
+    "version upgrade",
+    "decommissioned",
+)
 
 
 def get_connection():
@@ -20,9 +31,51 @@ def get_connection():
     return conn
 
 
+def _download_db_from_gcs():
+    if not DATABASE_BUCKET:
+        return
+    try:
+        from google.cloud import storage
+    except ImportError:
+        return
+
+    try:
+        client = storage.Client()
+        blob = client.bucket(DATABASE_BUCKET).blob("app.db")
+        if blob.exists():
+            DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+            blob.download_to_filename(str(DB_PATH))
+    except Exception as exc:  # PoC: keep serving even if sync fails
+        print(f"GCS download skipped: {exc}")
+
+
+def _upload_db_to_gcs():
+    if not DATABASE_BUCKET:
+        return
+    try:
+        from google.cloud import storage
+    except ImportError:
+        return
+
+    try:
+        client = storage.Client()
+        blob = client.bucket(DATABASE_BUCKET).blob("app.db")
+        blob.upload_from_filename(str(DB_PATH))
+    except Exception as exc:
+        print(f"GCS upload skipped: {exc}")
+
+
+def persist_db():
+    """Push the local SQLite file to GCS when configured."""
+    _upload_db_to_gcs()
+
+
 def init_db():
     """Create tables and load mock data; refresh when the schema version changes."""
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    if not DB_PATH.exists():
+        _download_db_from_gcs()
 
     with get_connection() as conn:
         conn.execute(
@@ -90,6 +143,9 @@ def init_db():
                 relationship TEXT NOT NULL,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_unique_link
+            ON edges (project_id, linked_type, linked_id);
             """
         )
 
@@ -102,6 +158,7 @@ def init_db():
                 """,
                 (str(SCHEMA_VERSION),),
             )
+            persist_db()
 
 
 def _seed(conn):
@@ -241,14 +298,12 @@ def _seed(conn):
         VALUES (?, ?, ?, ?, ?)
         """,
         [
-            # Risk links
             ("e1", "p1", "risk", "r1", "resolves"),
             ("e2", "p1", "risk", "r2", "reduces"),
             ("e3", "p2", "risk", "r2", "resolves"),
             ("e4", "p2", "risk", "r3", "reduces"),
             ("e5", "p3", "risk", "r4", "resolves"),
             ("e6", "p3", "risk", "r1", "reduces"),
-            # Architecture links
             ("e7", "p1", "architecture", "a1", "modified"),
             ("e8", "p1", "architecture", "a3", "version upgrade"),
             ("e9", "p2", "architecture", "a2", "implemented"),
@@ -376,7 +431,7 @@ def fetch_project_detail(project_id):
             dict(row)
             for row in conn.execute(
                 """
-                SELECT r.*, e.relationship
+                SELECT r.*, e.id AS edge_id, e.relationship
                 FROM edges e
                 JOIN risks r ON r.id = e.linked_id
                 WHERE e.project_id = ? AND e.linked_type = 'risk'
@@ -389,7 +444,7 @@ def fetch_project_detail(project_id):
             dict(row)
             for row in conn.execute(
                 """
-                SELECT a.*, e.relationship
+                SELECT a.*, e.id AS edge_id, e.relationship
                 FROM edges e
                 JOIN architecture_components a ON a.id = e.linked_id
                 WHERE e.project_id = ? AND e.linked_type = 'architecture'
@@ -420,7 +475,7 @@ def fetch_risk_detail(risk_id):
             dict(row)
             for row in conn.execute(
                 """
-                SELECT p.*, e.relationship
+                SELECT p.*, e.id AS edge_id, e.relationship
                 FROM edges e
                 JOIN projects p ON p.id = e.project_id
                 WHERE e.linked_type = 'risk' AND e.linked_id = ?
@@ -451,7 +506,7 @@ def fetch_architecture_detail(architecture_id):
             dict(row)
             for row in conn.execute(
                 """
-                SELECT p.*, e.relationship
+                SELECT p.*, e.id AS edge_id, e.relationship
                 FROM edges e
                 JOIN projects p ON p.id = e.project_id
                 WHERE e.linked_type = 'architecture' AND e.linked_id = ?
@@ -465,3 +520,83 @@ def fetch_architecture_detail(architecture_id):
         "architecture": dict(component),
         "linked_projects": linked_projects,
     }
+
+
+def _item_exists(conn, linked_type, linked_id):
+    table = "risks" if linked_type == "risk" else "architecture_components"
+    row = conn.execute(
+        f"SELECT 1 FROM {table} WHERE id = ?", (linked_id,)
+    ).fetchone()
+    return row is not None
+
+
+def add_link(project_id, linked_type, linked_id, relationship):
+    """Create a persistent edge. Returns (ok, message, edge)."""
+    if linked_type not in ("risk", "architecture"):
+        return False, "linked_type must be risk or architecture", None
+
+    if linked_type == "risk" and relationship not in RISK_RELATIONSHIPS:
+        return False, f"relationship must be one of {RISK_RELATIONSHIPS}", None
+    if (
+        linked_type == "architecture"
+        and relationship not in ARCHITECTURE_RELATIONSHIPS
+    ):
+        return (
+            False,
+            f"relationship must be one of {ARCHITECTURE_RELATIONSHIPS}",
+            None,
+        )
+
+    init_db()
+    with get_connection() as conn:
+        project = conn.execute(
+            "SELECT id FROM projects WHERE id = ?", (project_id,)
+        ).fetchone()
+        if project is None:
+            return False, "project not found", None
+        if not _item_exists(conn, linked_type, linked_id):
+            return False, f"{linked_type} not found", None
+
+        existing = conn.execute(
+            """
+            SELECT id FROM edges
+            WHERE project_id = ? AND linked_type = ? AND linked_id = ?
+            """,
+            (project_id, linked_type, linked_id),
+        ).fetchone()
+        if existing:
+            return False, "link already exists", None
+
+        edge_id = f"e-{uuid.uuid4().hex[:10]}"
+        conn.execute(
+            """
+            INSERT INTO edges (id, project_id, linked_type, linked_id, relationship)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (edge_id, project_id, linked_type, linked_id, relationship),
+        )
+        edge = {
+            "id": edge_id,
+            "project_id": project_id,
+            "linked_type": linked_type,
+            "linked_id": linked_id,
+            "relationship": relationship,
+        }
+
+    persist_db()
+    return True, "created", edge
+
+
+def remove_link(edge_id):
+    """Delete a persistent edge. Returns (ok, message)."""
+    init_db()
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT id FROM edges WHERE id = ?", (edge_id,)
+        ).fetchone()
+        if row is None:
+            return False, "link not found"
+        conn.execute("DELETE FROM edges WHERE id = ?", (edge_id,))
+
+    persist_db()
+    return True, "deleted"
