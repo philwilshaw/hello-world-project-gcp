@@ -152,13 +152,13 @@ ROADMAP_HTML = r"""
       display: grid;
       grid-template-columns: 220px 1fr;
       gap: 0.75rem;
-      margin-bottom: 0.85rem;
+      margin-bottom: 1rem;
       margin-left: -220px;
-      min-height: 92px;
+      min-height: 110px;
     }
 
     .row-label {
-      padding: 0.65rem 0.75rem 0.65rem 0;
+      padding: 0.85rem 0.75rem 0.65rem 0;
       color: var(--muted);
       font-size: 0.75rem;
       line-height: 1.35;
@@ -167,31 +167,43 @@ ROADMAP_HTML = r"""
     .row-label strong {
       display: block;
       color: var(--text);
-      font-size: 0.92rem;
-      margin-bottom: 0.2rem;
+      font-size: 1rem;
+      margin-bottom: 0.25rem;
     }
 
-    .row-label a {
-      color: var(--accent);
-      text-decoration: none;
-    }
-
-    .track {
+    .capability-box {
       position: relative;
-      min-height: 92px;
-      padding-bottom: 0.35rem;
+      min-height: 110px;
+      border: 1px solid rgba(125, 211, 192, 0.28);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      box-shadow: inset 0 0 0 1px rgba(16, 21, 28, 0.25);
+      padding: 0.65rem 0.5rem 0.75rem;
     }
+
+    .arch-lane {
+      position: relative;
+      min-height: 72px;
+      margin-bottom: 0.55rem;
+    }
+
+    .arch-lane:last-child { margin-bottom: 0; }
 
     .arch-bar {
       position: absolute;
-      top: 16px;
-      height: 54px;
+      top: 10px;
+      height: 52px;
       border-radius: 8px;
       padding: 0.45rem 0.65rem;
       overflow: hidden;
       color: #10151c;
       box-shadow: inset 0 0 0 1px rgba(16, 21, 28, 0.25);
       z-index: 2;
+    }
+
+    .arch-bar a {
+      color: inherit;
+      text-decoration: none;
     }
 
     .arch-bar .title {
@@ -209,7 +221,7 @@ ROADMAP_HTML = r"""
 
     .golive {
       position: absolute;
-      top: 8px;
+      top: 2px;
       transform: translateX(-50%);
       z-index: 4;
       width: 120px;
@@ -251,7 +263,7 @@ ROADMAP_HTML = r"""
 <body>
   <header>
     <h1>Architecture Roadmap Timeline</h1>
-    <p>Component lifespan by year · stars mark project go-lives that touch each element</p>
+    <p>Grouped by capability · lifespan bars by year · stars mark project go-lives</p>
     <div class="nav-links">
       <a href="/diagram">Timeline</a>
       <a href="/architecture">Architecture</a>
@@ -379,66 +391,76 @@ ROADMAP_HTML = r"""
       chart.appendChild(rows);
       root.appendChild(chart);
 
+      const byCapability = {};
       for (const component of dated) {
+        (byCapability[component.capability] ||= []).push(component);
+      }
+
+      for (const [capability, items] of Object.entries(byCapability)) {
         const row = document.createElement("div");
         row.className = "row";
 
         const label = document.createElement("div");
         label.className = "row-label";
         label.innerHTML = `
-          <strong><a href="/architecture/${component.id}">${component.title}</a></strong>
-          ${component.id} · ${component.capability}<br />
-          ${component.outlook}
+          <strong>${capability}</strong>
+          ${items.length} architecture element${items.length === 1 ? "" : "s"}
         `;
 
-        const track = document.createElement("div");
-        track.className = "track";
+        const box = document.createElement("div");
+        box.className = "capability-box";
 
-        const start = parseDate(component.bar_start);
-        const end = parseDate(component.bar_end) || rangeEnd;
-        const left = pct(start, rangeStart, rangeEnd);
-        const width = Math.max(pct(end, rangeStart, rangeEnd) - left, 2.5);
-        const color = OUTLOOK_COLORS[component.outlook] || "#8fa0b5";
+        items.forEach((component) => {
+          const lane = document.createElement("div");
+          lane.className = "arch-lane";
 
-        const bar = document.createElement("div");
-        bar.className = "arch-bar";
-        bar.style.left = left + "%";
-        bar.style.width = width + "%";
-        bar.style.background = `linear-gradient(180deg, ${color}, ${color}dd)`;
-        const endLabel = component.decommissioned_date || "active";
-        bar.innerHTML = `
-          <div class="title">${component.title}</div>
-          <div class="meta">
-            ${component.implemented_date || "?"} → ${component.go_live_date || "?"} · end ${endLabel}
-          </div>
-        `;
-        track.appendChild(bar);
+          const start = parseDate(component.bar_start);
+          const end = parseDate(component.bar_end) || rangeEnd;
+          const left = pct(start, rangeStart, rangeEnd);
+          const width = Math.max(pct(end, rangeStart, rangeEnd) - left, 2.5);
+          const color = OUTLOOK_COLORS[component.outlook] || "#8fa0b5";
 
-        const golives = component.project_golives || [];
-        golives.forEach((g, index) => {
-          const when = parseDate(g.date);
-          if (!when) return;
-          const marker = document.createElement("div");
-          marker.className = "golive";
-          marker.style.left = pct(when, rangeStart, rangeEnd) + "%";
-          marker.style.top = 4 + (index % 2) * 34 + "px";
-          marker.title = `${g.project_title} · ${g.relationship} · ${g.date}`;
-          marker.innerHTML = `
-            <span class="star">★</span>
-            <div class="label">
-              <strong>${g.project_title}</strong><br />
-              <span class="rel">${g.relationship}</span>
+          const bar = document.createElement("div");
+          bar.className = "arch-bar";
+          bar.style.left = left + "%";
+          bar.style.width = width + "%";
+          bar.style.background = `linear-gradient(180deg, ${color}, ${color}dd)`;
+          const endLabel = component.decommissioned_date || "active";
+          bar.innerHTML = `
+            <div class="title"><a href="/architecture/${component.id}">${component.title}</a></div>
+            <div class="meta">
+              ${component.id} · ${component.outlook}<br />
+              ${component.implemented_date || "?"} → ${component.go_live_date || "?"} · end ${endLabel}
             </div>
           `;
-          track.appendChild(marker);
+          lane.appendChild(bar);
+
+          const golives = component.project_golives || [];
+          golives.forEach((g, index) => {
+            const when = parseDate(g.date);
+            if (!when) return;
+            const marker = document.createElement("div");
+            marker.className = "golive";
+            marker.style.left = pct(when, rangeStart, rangeEnd) + "%";
+            marker.style.top = 0 + (index % 2) * 28 + "px";
+            marker.title = `${g.project_title} · ${g.relationship} · ${g.date}`;
+            marker.innerHTML = `
+              <span class="star">★</span>
+              <div class="label">
+                <strong>${g.project_title}</strong><br />
+                <span class="rel">${g.relationship}</span>
+              </div>
+            `;
+            lane.appendChild(marker);
+          });
+
+          const laneHeight = 72 + Math.max(0, golives.length - 1) * 16;
+          lane.style.minHeight = laneHeight + "px";
+          box.appendChild(lane);
         });
 
-        const needed = 92 + Math.max(0, golives.length - 1) * 18;
-        track.style.minHeight = needed + "px";
-        row.style.minHeight = needed + "px";
-
         row.appendChild(label);
-        row.appendChild(track);
+        row.appendChild(box);
         rows.appendChild(row);
       }
     }
