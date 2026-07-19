@@ -296,6 +296,8 @@ def _nav(active=None):
         ("/projects", "Projects"),
         ("/risks", "Risks"),
         ("/architecture", "Architecture"),
+        ("/architecture/diagram", "Arch diagram"),
+        ("/architecture/capabilities", "By capability"),
     ]
     parts = []
     for href, label in links:
@@ -456,6 +458,8 @@ def architecture_list():
               <td>{_esc(a['description'])}</td>
               <td>{_esc(a['component_type'])}</td>
               <td>{_esc(a['owner'])}</td>
+              <td>{_esc(a['capability'])}</td>
+              <td>{_esc(a['outlook'])}</td>
             </tr>
             """
         )
@@ -467,10 +471,10 @@ def architecture_list():
         nav=_nav("Architecture"),
         table_head="""
           <th>ID</th><th>Title</th><th>Description</th>
-          <th>Type</th><th>Owner</th>
+          <th>Type</th><th>Owner</th><th>Capability</th><th>Outlook</th>
         """,
         table_body="".join(body_rows)
-        or '<tr><td colspan="5" class="empty">No architecture components</td></tr>',
+        or '<tr><td colspan="7" class="empty">No architecture components</td></tr>',
     )
 
 
@@ -620,6 +624,8 @@ def risk_detail(risk_id):
 
 @catalog_bp.route("/architecture/<architecture_id>")
 def architecture_detail(architecture_id):
+    if architecture_id in {"diagram", "capabilities"}:
+        abort(404)
     data = fetch_architecture_detail(architecture_id)
     if data is None:
         abort(404)
@@ -647,6 +653,8 @@ def architecture_detail(architecture_id):
       <dt>Description</dt><dd>{_esc(a['description'])}</dd>
       <dt>Component type</dt><dd>{_esc(a['component_type'])}</dd>
       <dt>Owner</dt><dd>{_esc(a['owner'])}</dd>
+      <dt>Capability</dt><dd>{_esc(a['capability'])}</dd>
+      <dt>Arch outlook</dt><dd>{_esc(a['outlook'])}</dd>
     """
 
     linked = f"""

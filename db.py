@@ -12,7 +12,7 @@ import uuid
 from pathlib import Path
 
 DB_PATH = Path(os.environ.get("DATABASE_PATH", Path(__file__).parent / "app.db"))
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DATABASE_BUCKET = os.environ.get("DATABASE_BUCKET", "").strip()
 
 RISK_RELATIONSHIPS = ("resolves", "reduces")
@@ -20,6 +20,13 @@ ARCHITECTURE_RELATIONSHIPS = (
     "implemented",
     "modified",
     "version upgrade",
+    "decommissioned",
+)
+ARCHITECTURE_OUTLOOKS = (
+    "to be implemented",
+    "continue",
+    "to be decommissioned",
+    "upgrade",
     "decommissioned",
 )
 
@@ -94,6 +101,7 @@ def init_db():
         if current_version != SCHEMA_VERSION:
             conn.executescript(
                 """
+                DROP TABLE IF EXISTS architecture_edges;
                 DROP TABLE IF EXISTS edges;
                 DROP TABLE IF EXISTS architecture_components;
                 DROP TABLE IF EXISTS risks;
@@ -130,7 +138,9 @@ def init_db():
                 title TEXT NOT NULL,
                 description TEXT NOT NULL,
                 component_type TEXT NOT NULL,
-                owner TEXT NOT NULL
+                owner TEXT NOT NULL,
+                capability TEXT NOT NULL,
+                outlook TEXT NOT NULL
             );
 
             -- Links projects to risks or architecture components.
@@ -144,8 +154,21 @@ def init_db():
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             );
 
+            -- Relationships between architecture components.
+            CREATE TABLE IF NOT EXISTS architecture_edges (
+                id TEXT PRIMARY KEY,
+                source_id TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                relationship TEXT NOT NULL,
+                FOREIGN KEY (source_id) REFERENCES architecture_components(id),
+                FOREIGN KEY (target_id) REFERENCES architecture_components(id)
+            );
+
             CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_unique_link
             ON edges (project_id, linked_type, linked_id);
+
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_architecture_edges_unique
+            ON architecture_edges (source_id, target_id, relationship);
             """
         )
 
@@ -250,8 +273,8 @@ def _seed(conn):
     conn.executemany(
         """
         INSERT INTO architecture_components (
-            id, title, description, component_type, owner
-        ) VALUES (?, ?, ?, ?, ?)
+            id, title, description, component_type, owner, capability, outlook
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -260,6 +283,8 @@ def _seed(conn):
                 "Customer-facing web presence and content delivery stack.",
                 "Application",
                 "Digital Channels",
+                "Customer Channels",
+                "upgrade",
             ),
             (
                 "a2",
@@ -267,6 +292,8 @@ def _seed(conn):
                 "iOS and Android app for authenticated customer journeys.",
                 "Application",
                 "Digital Channels",
+                "Customer Channels",
+                "to be implemented",
             ),
             (
                 "a3",
@@ -274,6 +301,8 @@ def _seed(conn):
                 "API layer used by web and mobile channels.",
                 "Integration",
                 "Platform Engineering",
+                "Integration",
+                "continue",
             ),
             (
                 "a4",
@@ -281,6 +310,8 @@ def _seed(conn):
                 "On-premise finance system due to be retired after migration.",
                 "System",
                 "Finance Technology",
+                "Finance Systems",
+                "to be decommissioned",
             ),
             (
                 "a5",
@@ -288,6 +319,53 @@ def _seed(conn):
                 "Target cloud data platform for finance reporting.",
                 "Data Platform",
                 "Data Engineering",
+                "Data & Analytics",
+                "to be implemented",
+            ),
+            (
+                "a6",
+                "Contact Centre Desktop",
+                "Agent desktop used for phone-based customer support.",
+                "Application",
+                "Customer Operations",
+                "Customer Channels",
+                "continue",
+            ),
+            (
+                "a7",
+                "Batch File Hub",
+                "Legacy overnight file transfer service between channels and finance.",
+                "Integration",
+                "Platform Engineering",
+                "Integration",
+                "to be decommissioned",
+            ),
+            (
+                "a8",
+                "Event Streaming Bus",
+                "Near-real-time event backbone replacing batch file transfers.",
+                "Integration",
+                "Platform Engineering",
+                "Integration",
+                "upgrade",
+            ),
+            (
+                "a9",
+                "On-prem Reporting Mart",
+                "Historic reporting database retained only for audit archive access.",
+                "Data Platform",
+                "Data Engineering",
+                "Data & Analytics",
+                "decommissioned",
+            ),
+            (
+                "a10",
+                "Identity Service",
+                "Central authentication and authorisation for customer apps.",
+                "Platform",
+                "Security Engineering",
+                "Customer Channels",
+                "continue",
             ),
         ],
     )
@@ -310,6 +388,30 @@ def _seed(conn):
             ("e10", "p2", "architecture", "a3", "modified"),
             ("e11", "p3", "architecture", "a4", "decommissioned"),
             ("e12", "p3", "architecture", "a5", "implemented"),
+            ("e13", "p1", "architecture", "a8", "modified"),
+            ("e14", "p2", "architecture", "a10", "implemented"),
+            ("e15", "p3", "architecture", "a7", "decommissioned"),
+        ],
+    )
+
+    conn.executemany(
+        """
+        INSERT INTO architecture_edges (id, source_id, target_id, relationship)
+        VALUES (?, ?, ?, ?)
+        """,
+        [
+            ("ae1", "a1", "a3", "calls"),
+            ("ae2", "a2", "a3", "calls"),
+            ("ae3", "a1", "a10", "authenticates via"),
+            ("ae4", "a2", "a10", "authenticates via"),
+            ("ae5", "a6", "a3", "calls"),
+            ("ae6", "a3", "a8", "publishes to"),
+            ("ae7", "a7", "a4", "feeds"),
+            ("ae8", "a8", "a5", "feeds"),
+            ("ae9", "a5", "a4", "replaces"),
+            ("ae10", "a8", "a7", "replaces"),
+            ("ae11", "a9", "a4", "was sourced from"),
+            ("ae12", "a3", "a5", "reads"),
         ],
     )
 
@@ -412,9 +514,47 @@ def fetch_all_architecture():
         return [
             dict(row)
             for row in conn.execute(
-                "SELECT * FROM architecture_components ORDER BY id"
+                """
+                SELECT * FROM architecture_components
+                ORDER BY capability, title, id
+                """
             )
         ]
+
+
+def fetch_architecture_graph():
+    """Return architecture components and inter-component relationships."""
+    init_db()
+    with get_connection() as conn:
+        components = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT * FROM architecture_components
+                ORDER BY capability, title, id
+                """
+            )
+        ]
+        edges = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT id, source_id, target_id, relationship
+                FROM architecture_edges
+                ORDER BY id
+                """
+            )
+        ]
+    return {"components": components, "edges": edges}
+
+
+def fetch_architecture_by_capability():
+    """Return architecture components grouped by capability."""
+    components = fetch_all_architecture()
+    grouped = {}
+    for component in components:
+        grouped.setdefault(component["capability"], []).append(component)
+    return grouped
 
 
 def fetch_project_detail(project_id):

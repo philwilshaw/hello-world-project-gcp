@@ -2,12 +2,14 @@ import os
 
 from flask import Flask
 
+from architecture_views import architecture_views_bp
 from catalog import catalog_bp
 from db import init_db
 from diagram import diagram_bp
 
 app = Flask(__name__)
 app.register_blueprint(diagram_bp)
+app.register_blueprint(architecture_views_bp)
 app.register_blueprint(catalog_bp)
 init_db()
 
@@ -23,7 +25,9 @@ def hello():
   <a href="/diagram">Timeline demo</a> ·
   <a href="/projects">Projects</a> ·
   <a href="/risks">Risks</a> ·
-  <a href="/architecture">Architecture</a>
+  <a href="/architecture">Architecture</a> ·
+  <a href="/architecture/diagram">Arch diagram</a> ·
+  <a href="/architecture/capabilities">By capability</a>
 </p>
 
 <h2>✅ What I accomplished</h2>
