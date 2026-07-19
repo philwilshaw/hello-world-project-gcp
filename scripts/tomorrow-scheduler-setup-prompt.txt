@@ -1,0 +1,40 @@
+I already built DB backup/reset support in my Flask Cloud Run app
+(philwilshaw/hello-world-project-gcp). Please help me finish the one-time GCP
+setup so scheduled jobs work. Walk me through it step by step for a beginner,
+check what already exists, and run/fix the commands where possible.
+
+Branch context: cursor/project-risk-diagram-92d5 and/or dev.
+
+What’s already implemented in code
+- Separate DB buckets:
+  - dev: {PROJECT_ID}-hello-world-data-dev
+  - prod: {PROJECT_ID}-hello-world-data-prod
+- Endpoints:
+  - POST /internal/db/backup (hourly)
+  - POST /internal/db/reset-to-safe (midnight)
+  - Both require header X-Admin-Token: $ADMIN_TOKEN
+- Setup script: scripts/setup-db-jobs.sh
+- Notes: scripts/db-admin-notes.txt
+- Cursor admin CLI: scripts/db_admin.py
+- App URLs:
+  - dev: https://hello-world-dev-859465631308.europe-west1.run.app
+  - prod: https://hello-world-859465631308.europe-west1.run.app
+
+Please do / guide me through
+1. Confirm gcloud is authenticated and the correct project is selected.
+2. Generate/set a strong ADMIN_TOKEN on both Cloud Run services
+   (hello-world-dev and hello-world) in europe-west1 without committing it to git.
+3. Ensure the two GCS buckets exist and Cloud Run can read/write them.
+4. Create/update Cloud Scheduler jobs (Europe/London):
+   - hourly backup for dev + prod
+   - midnight reset-to-safe for dev + prod
+   Prefer using bash scripts/setup-db-jobs.sh if valid.
+5. Test:
+   - python3 scripts/db_admin.py --env dev status
+   - trigger one backup job manually
+   - confirm a backup object appears in the bucket
+6. Tell me the exact Cursor commands I’ll use day-to-day for:
+   - mark-safe
+   - enable-writes / disable-writes
+
+Important: don’t expose the admin token in git, PR text, or public app pages.
