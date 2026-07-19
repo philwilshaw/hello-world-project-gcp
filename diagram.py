@@ -395,6 +395,7 @@ DIAGRAM_HTML = r"""
       <a href="/architecture">Architecture</a>
       <a href="/architecture/diagram">Arch diagram</a>
       <a href="/architecture/capabilities">By capability</a>
+      <a href="/architecture/roadmap">Arch roadmap</a>
       <a href="/">Home</a>
     </div>
   </header>

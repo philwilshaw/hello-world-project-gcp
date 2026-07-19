@@ -332,6 +332,7 @@ def _nav(active=None):
         ("/architecture", "Architecture"),
         ("/architecture/diagram", "Arch diagram"),
         ("/architecture/capabilities", "By capability"),
+        ("/architecture/roadmap", "Arch roadmap"),
     ]
     parts = []
     for href, label in links:
@@ -695,7 +696,7 @@ def risk_detail(risk_id):
 
 @catalog_bp.route("/architecture/<architecture_id>")
 def architecture_detail(architecture_id):
-    if architecture_id in {"diagram", "capabilities"}:
+    if architecture_id in {"diagram", "capabilities", "roadmap"}:
         abort(404)
     data = fetch_architecture_detail(architecture_id)
     if data is None:
@@ -731,6 +732,9 @@ def architecture_detail(architecture_id):
       <dt>Owner</dt><dd>{_esc(a['owner'])}</dd>
       <dt>Capability</dt><dd>{_esc(a['capability'])}</dd>
       <dt>Arch outlook</dt><dd>{_esc(a['outlook'])}</dd>
+      <dt>Implemented</dt><dd>{_esc(a.get('implemented_date') or '—')}</dd>
+      <dt>Go live</dt><dd>{_esc(a.get('go_live_date') or '—')}</dd>
+      <dt>Decommissioned</dt><dd>{_esc(a.get('decommissioned_date') or '—')}</dd>
     """
 
     linked = f"""

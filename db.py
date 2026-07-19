@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "local").strip() or "local"
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # Prefer explicit bucket; otherwise derive a per-environment default name when
 # running in GCP-style envs. Local keeps files on disk only unless overridden.
@@ -309,7 +309,10 @@ def init_db():
                 component_type TEXT NOT NULL,
                 owner TEXT NOT NULL,
                 capability TEXT NOT NULL,
-                outlook TEXT NOT NULL
+                outlook TEXT NOT NULL,
+                implemented_date TEXT,
+                go_live_date TEXT,
+                decommissioned_date TEXT
             );
 
             -- Links projects to risks or architecture components.
@@ -451,8 +454,9 @@ def _seed(conn):
     conn.executemany(
         """
         INSERT INTO architecture_components (
-            id, title, description, component_type, owner, capability, outlook
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            id, title, description, component_type, owner, capability, outlook,
+            implemented_date, go_live_date, decommissioned_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -463,6 +467,9 @@ def _seed(conn):
                 "Digital Channels",
                 "Customer Channels",
                 "upgrade",
+                "2020-01-15",
+                "2020-06-01",
+                None,
             ),
             (
                 "a2",
@@ -472,6 +479,10 @@ def _seed(conn):
                 "Digital Channels",
                 "Customer Channels",
                 "to be implemented",
+                # Filled from Mobile App Launch project edge where possible.
+                None,
+                None,
+                None,
             ),
             (
                 "a3",
@@ -481,6 +492,9 @@ def _seed(conn):
                 "Platform Engineering",
                 "Integration",
                 "continue",
+                "2023-01-10",
+                "2023-06-30",
+                None,
             ),
             (
                 "a4",
@@ -490,6 +504,10 @@ def _seed(conn):
                 "Finance Technology",
                 "Finance Systems",
                 "to be decommissioned",
+                "2015-03-01",
+                "2015-09-01",
+                # Decommission date filled from Data Migration project edge.
+                None,
             ),
             (
                 "a5",
@@ -499,6 +517,9 @@ def _seed(conn):
                 "Data Engineering",
                 "Data & Analytics",
                 "to be implemented",
+                None,
+                None,
+                None,
             ),
             (
                 "a6",
@@ -508,6 +529,9 @@ def _seed(conn):
                 "Customer Operations",
                 "Customer Channels",
                 "continue",
+                "2019-02-01",
+                "2019-08-15",
+                None,
             ),
             (
                 "a7",
@@ -517,6 +541,9 @@ def _seed(conn):
                 "Platform Engineering",
                 "Integration",
                 "to be decommissioned",
+                "2016-05-01",
+                "2016-11-01",
+                None,
             ),
             (
                 "a8",
@@ -526,6 +553,9 @@ def _seed(conn):
                 "Platform Engineering",
                 "Integration",
                 "upgrade",
+                "2025-01-15",
+                "2025-09-01",
+                None,
             ),
             (
                 "a9",
@@ -535,6 +565,9 @@ def _seed(conn):
                 "Data Engineering",
                 "Data & Analytics",
                 "decommissioned",
+                "2014-04-01",
+                "2014-10-01",
+                "2024-12-31",
             ),
             (
                 "a10",
@@ -544,6 +577,9 @@ def _seed(conn):
                 "Security Engineering",
                 "Customer Channels",
                 "continue",
+                "2022-01-01",
+                "2022-06-01",
+                None,
             ),
         ],
     )
@@ -733,6 +769,123 @@ def fetch_architecture_by_capability():
     for component in components:
         grouped.setdefault(component["capability"], []).append(component)
     return grouped
+
+
+def fetch_architecture_roadmap():
+    """
+    Return architecture lifespan bars and project go-live impacts.
+
+    Lifecycle dates come from architecture_components first. Missing
+    implemented / go-live / decommissioned dates are inferred from project
+    edges (implemented / decommissioned relationships) where possible.
+    """
+    init_db()
+
+    with get_connection() as conn:
+        components = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT *
+                FROM architecture_components
+                ORDER BY capability, title, id
+                """
+            )
+        ]
+        project_links = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT
+                    e.id AS edge_id,
+                    e.linked_id AS architecture_id,
+                    e.relationship,
+                    p.id AS project_id,
+                    p.title AS project_title,
+                    p.start_date AS project_start_date,
+                    p.end_date AS project_end_date,
+                    p.rag_status
+                FROM edges e
+                JOIN projects p ON p.id = e.project_id
+                WHERE e.linked_type = 'architecture'
+                ORDER BY p.end_date, p.id
+                """
+            )
+        ]
+
+    links_by_arch = {}
+    for link in project_links:
+        links_by_arch.setdefault(link["architecture_id"], []).append(link)
+
+    roadmap = []
+    for component in components:
+        links = links_by_arch.get(component["id"], [])
+        implemented = component.get("implemented_date")
+        go_live = component.get("go_live_date")
+        decommissioned = component.get("decommissioned_date")
+        date_sources = {
+            "implemented_date": "architecture_components"
+            if implemented
+            else None,
+            "go_live_date": "architecture_components" if go_live else None,
+            "decommissioned_date": "architecture_components"
+            if decommissioned
+            else None,
+        }
+
+        for link in links:
+            if link["relationship"] == "implemented":
+                if not implemented:
+                    implemented = link["project_start_date"]
+                    date_sources["implemented_date"] = (
+                        f"project edge {link['project_id']} start"
+                    )
+                if not go_live:
+                    go_live = link["project_end_date"]
+                    date_sources["go_live_date"] = (
+                        f"project edge {link['project_id']} end"
+                    )
+            elif link["relationship"] == "decommissioned":
+                if not decommissioned:
+                    decommissioned = link["project_end_date"]
+                    date_sources["decommissioned_date"] = (
+                        f"project edge {link['project_id']} end"
+                    )
+
+        bar_start = implemented or go_live
+        bar_end = decommissioned  # None means still active
+
+        golives = [
+            {
+                "project_id": link["project_id"],
+                "project_title": link["project_title"],
+                "date": link["project_end_date"],
+                "relationship": link["relationship"],
+                "rag_status": link["rag_status"],
+            }
+            for link in links
+        ]
+
+        roadmap.append(
+            {
+                "id": component["id"],
+                "title": component["title"],
+                "description": component["description"],
+                "component_type": component["component_type"],
+                "owner": component["owner"],
+                "capability": component["capability"],
+                "outlook": component["outlook"],
+                "implemented_date": implemented,
+                "go_live_date": go_live,
+                "decommissioned_date": decommissioned,
+                "bar_start": bar_start,
+                "bar_end": bar_end,
+                "date_sources": date_sources,
+                "project_golives": golives,
+            }
+        )
+
+    return {"components": roadmap}
 
 
 def fetch_project_detail(project_id):

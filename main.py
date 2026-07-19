@@ -3,6 +3,7 @@ import os
 from flask import Flask
 
 from admin import admin_bp
+from architecture_roadmap import architecture_roadmap_bp
 from architecture_views import architecture_views_bp
 from catalog import catalog_bp
 from db import get_db_status, init_db
@@ -10,6 +11,7 @@ from diagram import diagram_bp
 
 app = Flask(__name__)
 app.register_blueprint(diagram_bp)
+app.register_blueprint(architecture_roadmap_bp)
 app.register_blueprint(architecture_views_bp)
 app.register_blueprint(catalog_bp)
 app.register_blueprint(admin_bp)
@@ -120,7 +122,8 @@ def hello():
   <a href="/risks">Risks</a> ·
   <a href="/architecture">Architecture</a> ·
   <a href="/architecture/diagram">Arch diagram</a> ·
-  <a href="/architecture/capabilities">By capability</a>
+  <a href="/architecture/capabilities">By capability</a> ·
+  <a href="/architecture/roadmap">Arch roadmap</a>
 </p>
 <p class="note">
   Pages above read from the <strong>{ENVIRONMENT}</strong> database.

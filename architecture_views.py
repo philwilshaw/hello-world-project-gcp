@@ -88,6 +88,7 @@ def _nav(active=None):
         ("/architecture", "Architecture"),
         ("/architecture/diagram", "Arch diagram"),
         ("/architecture/capabilities", "By capability"),
+        ("/architecture/roadmap", "Arch roadmap"),
     ]
     parts = []
     for href, label in links:
