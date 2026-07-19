@@ -1,93 +1,15 @@
 """
 Interactive project–risk diagram demo.
 
-Data model (mock "databases"):
-  - projects: nodes of type "project"
-  - risks:    nodes of type "risk"
-  - edges:    relationships between projects and risks
-
-The diagram reads edges first, then resolves only the nodes those edges
-reference. That pattern scales to more node types and more visualisations
-(timelines, tables, architecture views) without rewriting the data layer.
+Reads projects, risks, and edges from the SQLite database, then renders
+only the nodes referenced by edges using Cytoscape.js.
 """
 
 from flask import Blueprint, jsonify, render_template_string
 
+from db import fetch_graph_elements
+
 diagram_bp = Blueprint("diagram", __name__)
-
-# ---------------------------------------------------------------------------
-# Mock databases — replace with real DB queries later
-# ---------------------------------------------------------------------------
-
-PROJECTS = [
-    {"id": "p1", "name": "Website Redesign", "type": "project"},
-    {"id": "p2", "name": "Mobile App Launch", "type": "project"},
-    {"id": "p3", "name": "Data Migration", "type": "project"},
-]
-
-RISKS = [
-    {"id": "r1", "name": "Budget Overrun", "type": "risk"},
-    {"id": "r2", "name": "Schedule Slip", "type": "risk"},
-    {"id": "r3", "name": "Key Person Dependency", "type": "risk"},
-    {"id": "r4", "name": "Vendor Delay", "type": "risk"},
-]
-
-# Edges link project → risk. Only linked nodes appear on the diagram.
-EDGES = [
-    {"id": "e1", "source": "p1", "target": "r1", "label": "exposed to"},
-    {"id": "e2", "source": "p1", "target": "r2", "label": "exposed to"},
-    {"id": "e3", "source": "p2", "target": "r2", "label": "exposed to"},
-    {"id": "e4", "source": "p2", "target": "r3", "label": "exposed to"},
-    {"id": "e5", "source": "p3", "target": "r1", "label": "exposed to"},
-    {"id": "e6", "source": "p3", "target": "r4", "label": "exposed to"},
-]
-
-# Registry of node tables by type — add new types here as the app grows.
-NODE_TABLES = {
-    "project": PROJECTS,
-    "risk": RISKS,
-}
-
-
-def get_graph():
-    """Build a cytoscape-ready graph from edges + node tables."""
-    nodes_by_id = {
-        node["id"]: node
-        for table in NODE_TABLES.values()
-        for node in table
-    }
-
-    used_ids = set()
-    for edge in EDGES:
-        used_ids.add(edge["source"])
-        used_ids.add(edge["target"])
-
-    elements = []
-    for node_id in used_ids:
-        node = nodes_by_id[node_id]
-        elements.append(
-            {
-                "data": {
-                    "id": node["id"],
-                    "label": node["name"],
-                    "type": node["type"],
-                }
-            }
-        )
-
-    for edge in EDGES:
-        elements.append(
-            {
-                "data": {
-                    "id": edge["id"],
-                    "source": edge["source"],
-                    "target": edge["target"],
-                    "label": edge.get("label", ""),
-                }
-            }
-        )
-
-    return elements
 
 
 DIAGRAM_HTML = """
@@ -185,7 +107,7 @@ DIAGRAM_HTML = """
 <body>
   <header>
     <h1>Project–Risk Diagram</h1>
-    <p>Nodes and edges loaded from mock project, risk, and edge tables</p>
+    <p>Nodes and edges loaded from the SQLite projects, risks, and edges tables</p>
     <a href="/">← Home</a>
   </header>
 
@@ -310,4 +232,4 @@ def diagram_page():
 
 @diagram_bp.route("/diagram/data")
 def diagram_data():
-    return jsonify(get_graph())
+    return jsonify(fetch_graph_elements())

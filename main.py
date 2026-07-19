@@ -2,10 +2,12 @@ import os
 
 from flask import Flask
 
+from db import init_db
 from diagram import diagram_bp
 
 app = Flask(__name__)
 app.register_blueprint(diagram_bp)
+init_db()
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "local")
 
