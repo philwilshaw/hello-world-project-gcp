@@ -1,12 +1,17 @@
+import os
+
 from flask import Flask
 
 app = Flask(__name__)
 
-@app.route("/")
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "local")
+
+
 @app.route("/")
 def hello():
-    return """
+    return f"""
 <h1>🚀 My First Cloud Deployment Project</h1>
+<p><strong>Environment:</strong> {ENVIRONMENT}</p>
 
 <h2>✅ What I accomplished</h2>
 

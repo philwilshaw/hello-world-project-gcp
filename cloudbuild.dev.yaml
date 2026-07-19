@@ -1,6 +1,6 @@
 substitutions:
-  _SERVICE_NAME: hello-world
-  _ENVIRONMENT: prod
+  _SERVICE_NAME: hello-world-dev
+  _ENVIRONMENT: dev
   _REGION: europe-west1
 
 steps:
