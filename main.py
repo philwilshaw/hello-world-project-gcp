@@ -10,7 +10,6 @@ ENVIRONMENT = os.environ.get("ENVIRONMENT", "local")
 @app.route("/")
 def hello():
     return f"""
-    <p><strong>Dev deploy test:</strong> working</p>
 <h1>🚀 My First Cloud Deployment Project</h1>
 <p><strong>Environment:</strong> {ENVIRONMENT}</p>
 
@@ -56,6 +55,16 @@ def hello():
 <li>Made the app publicly accessible</li>
 </ul>
 
+<h3>7. Set up separate dev and production environments</h3>
+<ul>
+<li>Created a development branch alongside the main production branch</li>
+<li>Configured automated builds that run when code is pushed to GitHub</li>
+<li>Used separate deployment configs so dev and production deploy independently</li>
+<li>Deployed each environment to its own Cloud Run service</li>
+<li>Passed an environment label into the app so each deployment identifies itself</li>
+<li>Granted the build service the permissions needed to deploy to Cloud Run</li>
+</ul>
+
 <hr>
 
 <h2>🧠 What I built (big picture)</h2>
@@ -67,6 +76,8 @@ A working cloud system combining:
 <li>Git & GitHub (version control)</li>
 <li>Google Cloud Platform</li>
 <li>Serverless deployment (Cloud Run)</li>
+<li>Automated builds triggered by code changes</li>
+<li>Separate development and production environments</li>
 </ul>
 
 <hr>
@@ -84,6 +95,8 @@ A working cloud system combining:
 <li>Fixing permissions (IAM roles)</li>
 <li>Debugging Cloud Run build failures</li>
 <li>Understanding DNS and domain configuration</li>
+<li>Configuring build triggers and connecting a repository to the cloud platform</li>
+<li>Resolving service account and permission issues for automated deployments</li>
 </ul>
 
 <hr>
@@ -97,6 +110,8 @@ A working cloud system combining:
 <li>How cloud deployments work</li>
 <li>How containers are built and run</li>
 <li>How permissions and billing affect cloud systems</li>
+<li>How branch-based workflows support safe testing before production releases</li>
+<li>How environment variables distinguish development from production deployments</li>
 </ul>
 
 <hr>
@@ -112,9 +127,11 @@ I started with no experience and now I can:
 <li>Deploy it to the cloud</li>
 <li>Debug real technical issues</li>
 <li>Use Git and GitHub confidently</li>
+<li>Test changes in a development environment before releasing to production</li>
+<li>Let automated builds deploy my app when I push code</li>
 </ul>
 
-<p><strong>This project represents my first complete end-to-end cloud deployment.</strong></p>
+<p><strong>This project represents my first complete end-to-end cloud deployment, with separate development and production environments.</strong></p>
 """
 
 if __name__ == "__main__":
