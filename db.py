@@ -329,3 +329,139 @@ def fetch_timeline_data():
         "architecture_components": architecture_components,
         "edges": edges,
     }
+
+
+def fetch_all_projects():
+    init_db()
+    with get_connection() as conn:
+        return [
+            dict(row)
+            for row in conn.execute(
+                "SELECT * FROM projects ORDER BY start_date, id"
+            )
+        ]
+
+
+def fetch_all_risks():
+    init_db()
+    with get_connection() as conn:
+        return [
+            dict(row)
+            for row in conn.execute("SELECT * FROM risks ORDER BY id")
+        ]
+
+
+def fetch_all_architecture():
+    init_db()
+    with get_connection() as conn:
+        return [
+            dict(row)
+            for row in conn.execute(
+                "SELECT * FROM architecture_components ORDER BY id"
+            )
+        ]
+
+
+def fetch_project_detail(project_id):
+    """Return one project plus its linked risks and architecture components."""
+    init_db()
+    with get_connection() as conn:
+        project = conn.execute(
+            "SELECT * FROM projects WHERE id = ?", (project_id,)
+        ).fetchone()
+        if project is None:
+            return None
+
+        linked_risks = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT r.*, e.relationship
+                FROM edges e
+                JOIN risks r ON r.id = e.linked_id
+                WHERE e.project_id = ? AND e.linked_type = 'risk'
+                ORDER BY r.id
+                """,
+                (project_id,),
+            )
+        ]
+        linked_architecture = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT a.*, e.relationship
+                FROM edges e
+                JOIN architecture_components a ON a.id = e.linked_id
+                WHERE e.project_id = ? AND e.linked_type = 'architecture'
+                ORDER BY a.id
+                """,
+                (project_id,),
+            )
+        ]
+
+    return {
+        "project": dict(project),
+        "linked_risks": linked_risks,
+        "linked_architecture": linked_architecture,
+    }
+
+
+def fetch_risk_detail(risk_id):
+    """Return one risk plus the projects linked to it."""
+    init_db()
+    with get_connection() as conn:
+        risk = conn.execute(
+            "SELECT * FROM risks WHERE id = ?", (risk_id,)
+        ).fetchone()
+        if risk is None:
+            return None
+
+        linked_projects = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT p.*, e.relationship
+                FROM edges e
+                JOIN projects p ON p.id = e.project_id
+                WHERE e.linked_type = 'risk' AND e.linked_id = ?
+                ORDER BY p.start_date, p.id
+                """,
+                (risk_id,),
+            )
+        ]
+
+    return {
+        "risk": dict(risk),
+        "linked_projects": linked_projects,
+    }
+
+
+def fetch_architecture_detail(architecture_id):
+    """Return one architecture component plus the projects linked to it."""
+    init_db()
+    with get_connection() as conn:
+        component = conn.execute(
+            "SELECT * FROM architecture_components WHERE id = ?",
+            (architecture_id,),
+        ).fetchone()
+        if component is None:
+            return None
+
+        linked_projects = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT p.*, e.relationship
+                FROM edges e
+                JOIN projects p ON p.id = e.project_id
+                WHERE e.linked_type = 'architecture' AND e.linked_id = ?
+                ORDER BY p.start_date, p.id
+                """,
+                (architecture_id,),
+            )
+        ]
+
+    return {
+        "architecture": dict(component),
+        "linked_projects": linked_projects,
+    }

@@ -73,6 +73,17 @@ DIAGRAM_HTML = r"""
       font-size: 0.85rem;
     }
 
+    header .nav-links {
+      margin-left: auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    header .nav-links a {
+      margin-left: 0;
+    }
+
     .controls {
       display: flex;
       flex-wrap: wrap;
@@ -378,7 +389,12 @@ DIAGRAM_HTML = r"""
   <header>
     <h1>Project Impact Timeline</h1>
     <p>Projects address corporate risks and change architecture components</p>
-    <a href="/">← Home</a>
+    <div class="nav-links">
+      <a href="/projects">Projects</a>
+      <a href="/risks">Risks</a>
+      <a href="/architecture">Architecture</a>
+      <a href="/">Home</a>
+    </div>
   </header>
 
   <div class="controls">

@@ -2,11 +2,13 @@ import os
 
 from flask import Flask
 
+from catalog import catalog_bp
 from db import init_db
 from diagram import diagram_bp
 
 app = Flask(__name__)
 app.register_blueprint(diagram_bp)
+app.register_blueprint(catalog_bp)
 init_db()
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "local")
@@ -17,7 +19,12 @@ def hello():
     return f"""
 <h1>🚀 My First Cloud Deployment Project</h1>
 <p><strong>Environment:</strong> {ENVIRONMENT}</p>
-<p><a href="/diagram">Open project–risk diagram demo →</a></p>
+<p>
+  <a href="/diagram">Timeline demo</a> ·
+  <a href="/projects">Projects</a> ·
+  <a href="/risks">Risks</a> ·
+  <a href="/architecture">Architecture</a>
+</p>
 
 <h2>✅ What I accomplished</h2>
 
