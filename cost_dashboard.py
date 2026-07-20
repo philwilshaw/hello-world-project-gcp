@@ -22,7 +22,11 @@ EXTRA_CSS = r"""
 .cost-section { margin-bottom: 2rem; }
 .cost-section h2 {
   font-size: 1.35rem;
-  margin: 0 0 0.75rem;
+  margin: 1.25rem 0 0.75rem;
+}
+
+.cost-section:first-child h2 {
+  margin-top: 0.85rem;
 }
 .cost-legend {
   display: flex;
@@ -146,6 +150,11 @@ EXTRA_CSS = r"""
   display: flex;
   flex-direction: column;
   align-items: stretch;
+}
+
+.zone-group + .zone-group {
+  border-left: 1px solid rgba(125, 211, 192, 0.22);
+  padding-left: 0.55rem;
 }
 
 .year-bars {
@@ -423,6 +432,15 @@ def cost_dashboard_page():
     data = fetch_cost_dashboard()
     body = f"""
     <section class="cost-section">
+      <h2>Spend by zone · stacked Capex / Opex</h2>
+      <div class="cost-legend">
+        <span><i class="swatch capex"></i>Capex</span>
+        <span><i class="swatch opex"></i>Opex</span>
+      </div>
+      {_chart_html(data)}
+    </section>
+
+    <section class="cost-section">
       <h2>Cost by zone and year</h2>
       <div class="cost-legend">
         <span><i class="swatch capex"></i>Capex</span>
@@ -430,15 +448,6 @@ def cost_dashboard_page():
         <span><i class="swatch total"></i>Total (shaded)</span>
       </div>
       {_table_html(data)}
-    </section>
-
-    <section class="cost-section">
-      <h2>Spend by zone · stacked Capex / Opex</h2>
-      <div class="cost-legend">
-        <span><i class="swatch capex"></i>Capex</span>
-        <span><i class="swatch opex"></i>Opex</span>
-      </div>
-      {_chart_html(data)}
     </section>
 
     <section class="cost-section">

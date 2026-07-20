@@ -63,9 +63,13 @@ CAPABILITIES_EXTRA_CSS = """
 .zone-heading {
   font-size: 1.35rem;
   font-weight: 700;
-  margin: 0 0 0.55rem;
+  margin: 1.25rem 0 0.55rem;
   padding-bottom: 0.3rem;
   border-bottom: 2px solid var(--accent);
+}
+
+.zone-block:first-child .zone-heading {
+  margin-top: 0.75rem;
 }
 .subzone-block { margin: 0 0 0.95rem; }
 .subzone-heading {
