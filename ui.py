@@ -50,9 +50,12 @@ def render_header(title: str, subtitle: str = "", active: str | None = None) -> 
       <h1>{esc(title)}</h1>
       {subtitle_html}
     </div>
-    <a class="header-logo" href="/" title="PhilTech">
-      <img src="/static/philtech-logo.svg" alt="PhilTech" width="160" height="48" />
-    </a>
+    <div class="header-brand">
+      <a class="header-logo" href="/" title="PhilTech">
+        <img src="/static/philtech-logo.svg" alt="PhilTech" width="160" height="48" />
+      </a>
+      <p class="header-brand-note">Dummy data hosted on personal GCP</p>
+    </div>
   </div>
   <nav class="site-nav">
     {render_nav(active)}
