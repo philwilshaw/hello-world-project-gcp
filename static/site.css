@@ -37,6 +37,8 @@ body {
     linear-gradient(180deg, #121820 0%, var(--bg) 100%);
   color: var(--text);
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 a {
@@ -101,6 +103,7 @@ a:hover {
 .site-main {
   padding: 1.25rem 1.5rem 2rem;
   max-width: 1100px;
+  flex: 1;
 }
 
 .site-main.wide {
@@ -490,4 +493,110 @@ button.remove-link:disabled {
 
 .prose p {
   margin: 0.45rem 0;
+}
+
+/* ---------- Site footer ---------- */
+
+.site-footer {
+  margin-top: auto;
+  padding: 1.25rem 1.5rem 1.75rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.site-footer p {
+  margin: 0.35rem 0;
+}
+
+.site-footer .footer-links a {
+  font-weight: 650;
+}
+
+.site-footer .footer-note {
+  font-style: italic;
+  max-width: 42rem;
+}
+
+.site-footer .footer-copy {
+  font-size: 0.78rem;
+}
+
+/* ---------- Site map ---------- */
+
+.sitemap-section {
+  margin-bottom: 1.75rem;
+}
+
+.sitemap-heading {
+  font-size: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.sitemap-heading-main {
+  color: var(--text);
+}
+
+.sitemap-heading-detail {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.sitemap-intro {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 0 0 0.65rem;
+}
+
+.sitemap-list {
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.sitemap-list-main {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.55rem 1rem;
+}
+
+.sitemap-main-link {
+  display: block;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(125, 211, 192, 0.08);
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.sitemap-main-link:hover {
+  background: rgba(125, 211, 192, 0.14);
+  text-decoration: none;
+}
+
+.sitemap-list-detail {
+  padding-left: 0.25rem;
+  border-left: 2px solid var(--line);
+  margin-left: 0.15rem;
+}
+
+.sitemap-detail-link {
+  display: block;
+  padding: 0.3rem 0.55rem;
+  color: var(--link);
+  font-size: 0.88rem;
+}
+
+.sitemap-detail-link:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  text-decoration: none;
+}
+
+.sitemap-id {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
 }

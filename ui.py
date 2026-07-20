@@ -1,10 +1,11 @@
 """
-Shared page chrome: header, nav, and HTML shell matching the timeline look.
+Shared page chrome: header, nav, footer, and HTML shell matching the timeline look.
 """
 
 from __future__ import annotations
 
 import html
+from datetime import datetime
 
 from flask import render_template_string
 
@@ -51,6 +52,17 @@ def render_header(title: str, subtitle: str = "", active: str | None = None) -> 
 """
 
 
+def render_footer() -> str:
+    year = datetime.now().year
+    return f"""
+<footer class="site-footer">
+  <p class="footer-links"><a href="/sitemap">Site map</a></p>
+  <p class="footer-note">build with cursor AI on my phone on a train and in the gym in a few hours with zero prior experience</p>
+  <p class="footer-copy">&copy; {year}</p>
+</footer>
+"""
+
+
 SHELL = """
 <!DOCTYPE html>
 <html lang="en">
@@ -66,6 +78,7 @@ SHELL = """
 <body>
   {{ header|safe }}
   {{ body|safe }}
+  {{ footer|safe }}
   {% if extra_js %}
   {{ extra_js|safe }}
   {% endif %}
@@ -86,6 +99,7 @@ def render_page(
 ):
     """Render a full HTML page with the shared header and stylesheet."""
     header = render_header(title, subtitle=subtitle, active=active)
+    footer = render_footer()
     # If callers already wrap content, use as-is; otherwise wrap in site-main.
     wrapped = body
     if "<main" not in body and not wide:
@@ -98,6 +112,7 @@ def render_page(
         title=title,
         header=header,
         body=wrapped,
+        footer=footer,
         extra_css=extra_css,
         extra_js=extra_js,
     )

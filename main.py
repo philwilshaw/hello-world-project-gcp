@@ -8,6 +8,7 @@ from architecture_views import architecture_views_bp
 from catalog import catalog_bp
 from db import get_db_status, init_db
 from diagram import diagram_bp
+from sitemap import sitemap_bp
 from ui import esc, render_page
 
 app = Flask(__name__)
@@ -15,6 +16,7 @@ app.register_blueprint(diagram_bp)
 app.register_blueprint(architecture_roadmap_bp)
 app.register_blueprint(architecture_views_bp)
 app.register_blueprint(catalog_bp)
+app.register_blueprint(sitemap_bp)
 app.register_blueprint(admin_bp)
 init_db()
 
