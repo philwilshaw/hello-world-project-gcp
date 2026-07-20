@@ -10,6 +10,43 @@ from flask import Blueprint
 zones_bp = Blueprint("zones", __name__)
 
 EXTRA_CSS = """
+.zones-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 0.85rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.85rem;
+}
+
+.zones-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.zones-controls input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.zones-grid.hide-l2 .sub-zone-block {
+  display: none;
+}
+
+.zones-grid.hide-l3 .capability-list,
+.zones-grid.hide-l3 .sub-zone-meta {
+  display: none;
+}
+
 .zones-legend {
   display: flex;
   flex-wrap: wrap;
@@ -172,6 +209,26 @@ EXTRA_CSS = """
 }
 """
 
+EXTRA_JS = """
+<script>
+  (function () {
+    const grid = document.querySelector(".zones-grid");
+    const toggleL2 = document.getElementById("zones-show-l2");
+    const toggleL3 = document.getElementById("zones-show-l3");
+    if (!grid || !toggleL2 || !toggleL3) return;
+
+    function syncVisibility() {
+      grid.classList.toggle("hide-l2", !toggleL2.checked);
+      grid.classList.toggle("hide-l3", !toggleL3.checked);
+    }
+
+    toggleL2.addEventListener("change", syncVisibility);
+    toggleL3.addEventListener("change", syncVisibility);
+    syncVisibility();
+  })();
+</script>
+"""
+
 
 def _entity_tags(sub_zone: dict) -> str:
     tags = []
@@ -235,6 +292,17 @@ def zones_page():
     data = fetch_zones_tree()
     cards = "".join(_zone_card(zone) for zone in data["zones"])
     body = f"""
+<div class="zones-controls">
+  <span>Show:</span>
+  <label for="zones-show-l2">
+    <input type="checkbox" id="zones-show-l2" checked />
+    L2 sub-zones
+  </label>
+  <label for="zones-show-l3">
+    <input type="checkbox" id="zones-show-l3" checked />
+    L3 capabilities
+  </label>
+</div>
 <div class="zones-legend">
   <span><i class="legend-pill l1"></i>L1 Zone</span>
   <span><i class="legend-pill l2"></i>L2 Sub-zone</span>
@@ -250,4 +318,5 @@ def zones_page():
         active="Zones",
         body=body,
         extra_css=EXTRA_CSS,
+        extra_js=EXTRA_JS,
     )
