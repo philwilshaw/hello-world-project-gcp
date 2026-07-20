@@ -78,6 +78,19 @@ EXTRA_CSS = r"""
   z-index: 1;
 }
 
+.zone-group {
+  margin-bottom: 1.35rem;
+}
+
+.zone-group-title {
+  margin: 0 0 0.55rem;
+  margin-left: -220px;
+  padding-left: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
 .row {
   display: grid;
   grid-template-columns: 220px 1fr;
@@ -102,10 +115,29 @@ EXTRA_CSS = r"""
   margin-bottom: 0.2rem;
 }
 
+.group-box {
+  position: relative;
+  border: 1px solid rgba(125, 211, 192, 0.28);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(16, 21, 28, 0.25);
+  padding: 0.55rem 0.5rem 0.65rem;
+}
+
+.project-lane {
+  position: relative;
+  margin-bottom: 0.45rem;
+  transition: opacity 180ms ease, min-height 180ms ease;
+}
+
+.project-lane:last-child {
+  margin-bottom: 0;
+}
+
 .track {
   position: relative;
   min-height: 72px;
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.35rem;
   transition: min-height 180ms ease;
 }
 
@@ -405,12 +437,12 @@ DIAGRAM_JS = r"""
     let selected = null;
 
     function applySelection() {
-      const rowEls = [...root.querySelectorAll(".row")];
+      const lanes = [...root.querySelectorAll(".project-lane")];
       const bars = [...root.querySelectorAll(".project-bar")];
       const impacts = [...root.querySelectorAll(".impact")];
 
       if (!selected) {
-        rowEls.forEach((el) => el.classList.remove("faded"));
+        lanes.forEach((el) => el.classList.remove("faded"));
         bars.forEach((el) => el.classList.remove("selected", "faded"));
         impacts.forEach((el) => el.classList.remove("selected", "faded"));
         return;
@@ -425,10 +457,10 @@ DIAGRAM_JS = r"""
           .map((e) => e.project_id)
       );
 
-      rowEls.forEach((row) => {
-        row.classList.toggle(
+      lanes.forEach((lane) => {
+        lane.classList.toggle(
           "faded",
-          !linkedProjects.has(row.dataset.projectId)
+          !linkedProjects.has(lane.dataset.projectId)
         );
       });
 
@@ -489,14 +521,10 @@ DIAGRAM_JS = r"""
       });
     }
 
-    for (const project of data.projects) {
-      const row = document.createElement("div");
-      row.className = "row";
-      row.dataset.projectId = project.id;
-
-      const label = document.createElement("div");
-      label.className = "row-label";
-      label.innerHTML = `<strong>${project.id}</strong>${project.rag_status} · Capex ${formatMoney(project.capex_gbp)}`;
+    function appendProjectLane(container, project) {
+      const lane = document.createElement("div");
+      lane.className = "project-lane";
+      lane.dataset.projectId = project.id;
 
       const track = document.createElement("div");
       track.className = "track";
@@ -525,7 +553,6 @@ DIAGRAM_JS = r"""
       );
       const impacts = document.createElement("div");
       impacts.className = "impacts";
-      // Anchor markers to the project end date.
       impacts.style.left = endPct + "%";
       impacts.style.transform = "translateX(-12px)";
 
@@ -565,9 +592,47 @@ DIAGRAM_JS = r"""
       track.style.minHeight =
         linked.length === 0 ? "72px" : 68 + linked.length * 28 + 12 + "px";
 
-      row.appendChild(label);
-      row.appendChild(track);
-      rows.appendChild(row);
+      lane.appendChild(track);
+      container.appendChild(lane);
+    }
+
+    const byZone = {};
+    for (const project of data.projects) {
+      const zoneName = project.zone_name || "Unassigned zone";
+      const subName = project.sub_zone_name || "Unassigned sub-zone";
+      ((byZone[zoneName] ||= {})[subName] ||= []).push(project);
+    }
+
+    for (const [zoneName, subZones] of Object.entries(byZone)) {
+      const zoneGroup = document.createElement("div");
+      zoneGroup.className = "zone-group";
+
+      const zoneTitle = document.createElement("h2");
+      zoneTitle.className = "zone-group-title";
+      zoneTitle.textContent = `Zone: ${zoneName}`;
+      zoneGroup.appendChild(zoneTitle);
+
+      for (const [subName, projects] of Object.entries(subZones)) {
+        const row = document.createElement("div");
+        row.className = "row";
+
+        const label = document.createElement("div");
+        label.className = "row-label";
+        label.innerHTML = `
+          <strong>SubZone: ${subName}</strong>
+          ${projects.length} project${projects.length === 1 ? "" : "s"}
+        `;
+
+        const box = document.createElement("div");
+        box.className = "group-box";
+        projects.forEach((project) => appendProjectLane(box, project));
+
+        row.appendChild(label);
+        row.appendChild(box);
+        zoneGroup.appendChild(row);
+      }
+
+      rows.appendChild(zoneGroup);
     }
 
     ["toggle-projects", "toggle-risks", "toggle-architecture"].forEach((id) => {
@@ -593,7 +658,7 @@ DIAGRAM_JS = r"""
 def diagram_page():
     return render_page(
         title="Project Roadmap",
-        subtitle="Projects address corporate risks and change architecture components",
+        subtitle="Projects grouped by zone and sub-zone · linked risks and architecture impacts",
         active="Project Roadmap",
         body=DIAGRAM_BODY,
         extra_css=EXTRA_CSS,

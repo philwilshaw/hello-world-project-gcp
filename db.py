@@ -841,16 +841,26 @@ def fetch_timeline_data():
             placeholders = ",".join("?" for _ in project_ids)
             for row in conn.execute(
                 f"""
-                SELECT *
-                FROM projects
-                WHERE line_id IN ({placeholders})
-                ORDER BY line_id
+                SELECT
+                    p.*,
+                    z.name AS zone_name,
+                    z.sort_order AS zone_sort,
+                    sz.name AS sub_zone_name,
+                    sz.sort_order AS sub_zone_sort
+                FROM projects p
+                JOIN sub_zones sz ON sz.id = p.sub_zone_id
+                JOIN zones z ON z.id = sz.zone_id
+                WHERE p.line_id IN ({placeholders})
+                ORDER BY z.sort_order, z.name, sz.sort_order, sz.name, p.line_id
                 """,
                 tuple(project_ids),
             ):
                 project = dict(row)
                 budget = budgets.get(project["budget_id"])
-                projects.append(_enrich_project(project, budget))
+                enriched = _enrich_project(project, budget)
+                enriched["zone_name"] = project["zone_name"]
+                enriched["sub_zone_name"] = project["sub_zone_name"]
+                projects.append(enriched)
 
         risks = [_enrich_risk(r) for r in _fetch_by_ids(conn, "risks", risk_ids)]
         caps = _capabilities_by_id(conn)
