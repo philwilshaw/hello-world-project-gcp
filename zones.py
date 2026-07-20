@@ -4,10 +4,19 @@ Zones visualisation: L1 zones, L2 sub-zones, and L3 capabilities.
 
 from db import fetch_zones_tree
 from ui import esc, render_page
+from zones_data import ZONES
 
 from flask import Blueprint
 
 zones_bp = Blueprint("zones", __name__)
+
+_ZONE_PEOPLE = {
+    zone["id"]: {
+        "enterprise_architect": zone["enterprise_architect"],
+        "stakeholders": zone["stakeholders"],
+    }
+    for zone in ZONES
+}
 
 EXTRA_CSS = """
 .zones-controls {
@@ -219,6 +228,33 @@ EXTRA_CSS = """
   border-color: rgba(125, 211, 192, 0.45);
   color: var(--accent);
 }
+
+.zone-card-footer {
+  margin-top: auto;
+  padding: 0.85rem 1rem 1rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.zone-card-footer strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.zone-card-footer .stakeholders-label {
+  margin-top: 0.5rem;
+}
+
+.zone-card-footer .stakeholder-list {
+  margin: 0.35rem 0 0 1.1rem;
+  padding: 0;
+  color: var(--muted);
+}
+
+.zone-card-footer .stakeholder-list li {
+  margin-bottom: 0.2rem;
+}
 """
 
 EXTRA_JS = """
@@ -256,6 +292,14 @@ def _entity_tags(sub_zone: dict) -> str:
 
 
 def _zone_card(zone: dict) -> str:
+    people = _ZONE_PEOPLE.get(zone["id"], {})
+    architect = people.get("enterprise_architect", "TBD")
+    stakeholders = people.get("stakeholders", [])
+    stakeholder_items = "".join(
+        f"<li>{esc(name)} ({esc(title)})</li>"
+        for name, title in stakeholders
+    )
+
     sub_blocks = []
     for sub_zone in zone["sub_zones"]:
         caps = "".join(
@@ -294,6 +338,11 @@ def _zone_card(zone: dict) -> str:
       </div>
       <div class="zone-body">
         {"".join(sub_blocks)}
+      </div>
+      <div class="zone-card-footer">
+        <div><strong>Enterprise Architect:</strong> {esc(architect)}</div>
+        <div class="stakeholders-label"><strong>Stakeholders:</strong></div>
+        <ul class="stakeholder-list">{stakeholder_items}</ul>
       </div>
     </article>
     """
