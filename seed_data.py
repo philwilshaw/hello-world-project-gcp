@@ -66,6 +66,7 @@ SERVICE_TYPES = (
     "Professional Services",
 )
 CONTRACT_STATUSES = ("Archive", "Current")
+NEXT_RENEWAL_ACTIONS = ("Renew 1y", "Renew 2y", "Renew 3y", "Terminate", "TBC")
 
 RENAISSANCE_ARTISTS = (
     "Leonardo da Vinci",
@@ -404,6 +405,7 @@ def generate_run_contracts(budgets, zone_maps, count=50):
                 "contract_start_date": start.isoformat(),
                 "contract_end_date": end.isoformat(),
                 "po_renewal_date": po_renewal.isoformat(),
+                "next_renewal_action": random.choice(NEXT_RENEWAL_ACTIONS),
                 "contract_status": status,
                 "vendor_manager": random.choice(FOOTBALL_PLAYERS),
                 "operational_owner": random.choice(TENNIS_PLAYERS),

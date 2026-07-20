@@ -682,6 +682,7 @@ def run_contracts_list():
               <td>{_esc(rc['contract_start_date'])}</td>
               <td>{_esc(rc['contract_end_date'])}</td>
               <td>{_esc(rc['po_renewal_date'])}</td>
+              <td>{_esc(rc['next_renewal_action'])}</td>
               <td>{_esc(rc['contract_status'])}</td>
               <td>{_esc(rc['vendor_manager'])}</td>
               <td>{_esc(rc['operational_owner'])}</td>
@@ -700,11 +701,11 @@ def run_contracts_list():
           <th>VendorName</th><th>Manufacturer</th><th>ContractName</th>
           <th>Description</th><th>DetailedDescription</th>
           <th>ContractStartDate</th><th>ContractEndDate</th><th>PORenewalDate</th>
-          <th>ContractStatus</th><th>VendorManager</th><th>OperationalOwner</th>
+          <th>NextRenewalAction</th><th>ContractStatus</th><th>VendorManager</th><th>OperationalOwner</th>
           <th>Zone</th><th>Subzone</th>
         """,
         table_body="".join(body_rows)
-        or '<tr><td colspan="16" class="empty">No run contracts</td></tr>',
+        or '<tr><td colspan="17" class="empty">No run contracts</td></tr>',
     )
 
 
@@ -902,6 +903,7 @@ def run_contract_detail(fin_id):
       <dt>Detailed description</dt><dd>{_esc(rc['detailed_description'])}</dd>
       <dt>Start / End</dt><dd>{_esc(rc['contract_start_date'])} → {_esc(rc['contract_end_date'])}</dd>
       <dt>PO renewal date</dt><dd>{_esc(rc['po_renewal_date'])}</dd>
+      <dt>Next renewal action</dt><dd>{_esc(rc['next_renewal_action'])}</dd>
       <dt>Status</dt><dd>{_esc(rc['contract_status'])}</dd>
       <dt>Vendor manager</dt><dd>{_esc(rc['vendor_manager'])}</dd>
       <dt>Operational owner</dt><dd>{_esc(rc['operational_owner'])}</dd>

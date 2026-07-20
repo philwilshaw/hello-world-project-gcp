@@ -9,6 +9,7 @@ from catalog import catalog_bp
 from cost_dashboard import cost_dashboard_bp
 from db import get_db_status, init_db
 from diagram import diagram_bp
+from run_contract_roadmap import run_contract_roadmap_bp
 from sitemap import sitemap_bp
 from zones import zones_bp
 from ui import esc, register_layout, render_page
@@ -19,6 +20,7 @@ app.register_blueprint(architecture_roadmap_bp)
 app.register_blueprint(architecture_views_bp)
 app.register_blueprint(catalog_bp)
 app.register_blueprint(cost_dashboard_bp)
+app.register_blueprint(run_contract_roadmap_bp)
 app.register_blueprint(sitemap_bp)
 app.register_blueprint(zones_bp)
 app.register_blueprint(admin_bp)

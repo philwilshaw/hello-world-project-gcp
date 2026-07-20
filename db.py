@@ -10,11 +10,11 @@ import os
 import shutil
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "local").strip() or "local"
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 # Prefer explicit bucket; otherwise derive a per-environment default name when
 # running in GCP-style envs. Local keeps files on disk only unless overridden.
@@ -273,6 +273,7 @@ def init_db():
         current_version = int(row["value"]) if row else 0
 
         if current_version != SCHEMA_VERSION:
+            conn.execute("PRAGMA foreign_keys = OFF")
             conn.executescript(
                 """
                 DROP TABLE IF EXISTS architecture_edges;
@@ -287,6 +288,7 @@ def init_db():
                 DROP TABLE IF EXISTS zones;
                 """
             )
+            conn.execute("PRAGMA foreign_keys = ON")
 
         conn.executescript(
             """
@@ -409,6 +411,7 @@ def init_db():
                 contract_start_date TEXT NOT NULL,
                 contract_end_date TEXT NOT NULL,
                 po_renewal_date TEXT NOT NULL,
+                next_renewal_action TEXT NOT NULL,
                 contract_status TEXT NOT NULL,
                 vendor_manager TEXT NOT NULL,
                 operational_owner TEXT NOT NULL,
@@ -668,9 +671,9 @@ def _seed(conn):
         INSERT INTO run_contracts (
             fin_id, service_type, linked_budget_id, vendor_name, manufacturer,
             contract_name, description, detailed_description, contract_start_date,
-            contract_end_date, po_renewal_date, contract_status, vendor_manager,
-            operational_owner, sub_zone_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            contract_end_date, po_renewal_date, next_renewal_action, contract_status,
+            vendor_manager, operational_owner, sub_zone_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -685,6 +688,7 @@ def _seed(conn):
                 rc["contract_start_date"],
                 rc["contract_end_date"],
                 rc["po_renewal_date"],
+                rc["next_renewal_action"],
                 rc["contract_status"],
                 rc["vendor_manager"],
                 rc["operational_owner"],
@@ -1106,6 +1110,65 @@ def fetch_all_run_contracts():
             item["sub_zone_name"] = row["sub_zone_name"]
             rows.append(item)
         return rows
+
+
+def _add_years(value: date, years: int) -> date:
+    try:
+        return date(value.year + years, value.month, value.day)
+    except ValueError:
+        return date(value.year + years, value.month, 28)
+
+
+def _contract_po_dates(start_iso: str, end_iso: str) -> list[str]:
+    """Annual PO renewal markers from contract start up to (not including) end."""
+    start = date.fromisoformat(start_iso)
+    end = date.fromisoformat(end_iso)
+    dates = [start]
+    renewal = _add_years(start, 1)
+    while renewal < end:
+        dates.append(renewal)
+        renewal = _add_years(renewal, 1)
+    return [d.isoformat() for d in dates]
+
+
+def _renewal_extension_years(action: str) -> int:
+    if action == "Renew 1y":
+        return 1
+    if action == "Renew 2y":
+        return 2
+    if action == "Renew 3y":
+        return 3
+    return 0
+
+
+def fetch_run_contract_roadmap():
+    """Run contracts grouped by zone/sub-zone with PO dates and renewal outlook."""
+    init_db()
+    with get_connection() as conn:
+        rows = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT rc.*, z.name AS zone_name, sz.name AS sub_zone_name
+                FROM run_contracts rc
+                JOIN sub_zones sz ON sz.id = rc.sub_zone_id
+                JOIN zones z ON z.id = sz.zone_id
+                ORDER BY z.name, sz.name, rc.contract_start_date, rc.fin_id
+                """
+            )
+        ]
+
+    contracts = []
+    for row in rows:
+        item = _enrich_run_contract(row)
+        item["zone_name"] = row["zone_name"]
+        item["sub_zone_name"] = row["sub_zone_name"]
+        item["po_dates"] = _contract_po_dates(
+            row["contract_start_date"], row["contract_end_date"]
+        )
+        item["extension_years"] = _renewal_extension_years(row["next_renewal_action"])
+        contracts.append(item)
+    return {"contracts": contracts}
 
 
 COST_YEARS = (2026, 2027, 2028, 2029)

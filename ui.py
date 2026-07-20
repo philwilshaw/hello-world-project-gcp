@@ -19,6 +19,7 @@ NAV_ITEMS = [
     ("/architecture", "Architecture List"),
     ("/budgets", "Budget List"),
     ("/run-contracts", "Run Contract List"),
+    ("/run-contracts/roadmap", "Run Contract Roadmap"),
     ("/architecture/diagram", "Architecture Diagram"),
     ("/architecture/capabilities", "Architecture Model"),
     ("/architecture/roadmap", "Architecture Roadmap"),
