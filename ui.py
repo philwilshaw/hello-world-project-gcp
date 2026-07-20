@@ -84,9 +84,11 @@ SHELL = """
   {% endif %}
 </head>
 <body>
-  {{ header|safe }}
-  {{ body|safe }}
-  {{ footer|safe }}
+  <div class="site-container">
+    {{ header|safe }}
+    {{ body|safe }}
+    {{ footer|safe }}
+  </div>
   {% if extra_js %}
   {{ extra_js|safe }}
   {% endif %}

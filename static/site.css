@@ -60,6 +60,21 @@ a:hover {
   text-decoration: underline;
 }
 
+/* ---------- Page container ---------- */
+
+.site-container {
+  width: 100%;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+}
+
 /* ---------- Site header / menu ---------- */
 
 .site-header {
@@ -158,19 +173,16 @@ a:hover {
 
 .site-main {
   padding: 1.25rem 1.5rem 2rem;
-  max-width: 1100px;
   flex: 1;
+  width: 100%;
 }
 
 .site-main.wide {
-  max-width: none;
-  padding-left: 0;
-  padding-right: 0;
   padding-bottom: 1.5rem;
 }
 
 .site-hint {
-  padding: 0 1.5rem 1.25rem;
+  padding: 0 0 1.25rem;
   color: var(--muted);
   font-size: 0.75rem;
 }
@@ -181,7 +193,7 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 0.85rem 1.1rem;
-  padding: 0.75rem 1.5rem;
+  padding: 0.75rem 0;
   color: var(--muted);
   font-size: 0.8rem;
 }
@@ -222,7 +234,7 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem 1.25rem;
-  padding: 0.85rem 1.5rem 0.35rem;
+  padding: 0.85rem 0 0.35rem;
   color: var(--muted);
   font-size: 0.82rem;
   border-bottom: 1px solid rgba(43, 58, 77, 0.55);
@@ -581,7 +593,6 @@ button.remove-link:disabled {
   width: 100%;
   padding: 1.25rem 1.5rem calc(1.75rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--line);
-  background: var(--bg);
   color: var(--muted);
   font-size: 0.82rem;
   line-height: 1.5;
