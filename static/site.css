@@ -464,13 +464,6 @@ button.remove-link:disabled {
 
 /* ---------- Homepage prose ---------- */
 
-.prose .welcome {
-  font-size: 1.15rem;
-  font-weight: 650;
-  margin: 0 0 1rem;
-  color: var(--text);
-}
-
 .prose h2 {
   margin: 1.5rem 0 0.75rem;
   font-size: 1.15rem;

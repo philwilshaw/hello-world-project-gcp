@@ -36,8 +36,6 @@ def hello():
 
     body = f"""
 <div class="prose">
-<p class="welcome">Welcome to the demo site</p>
-
 <div class="panel">
   <div class="status-row">
     <span>Database writes: <span class="pill {pill_class}">{esc(writes_label)}</span></span>
@@ -259,7 +257,7 @@ I started with no experience and now I can:
 
     return render_page(
         title="My First Cloud Deployment Project",
-        subtitle="",
+        subtitle="Welcome to the demo site",
         active="Home",
         body=body,
         extra_js=restore_js,
