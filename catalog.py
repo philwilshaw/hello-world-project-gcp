@@ -424,7 +424,7 @@ def project_detail(project_id):
     """
 
     return _detail_page(
-        title=p["title"],
+        title=f"Project: {p['title']}",
         subtitle=f"Project detail · {p['id']}",
         active="Project List",
         back_href="/projects",
@@ -493,7 +493,7 @@ def risk_detail(risk_id):
     """
 
     return _detail_page(
-        title=r["title"],
+        title=f"Risk: {r['title']}",
         subtitle=f"Risk detail · {r['id']}",
         active="Risk List",
         back_href="/risks",
@@ -565,7 +565,7 @@ def architecture_detail(architecture_id):
     """
 
     return _detail_page(
-        title=a["title"],
+        title=f"Architecture Component: {a['title']}",
         subtitle=f"Architecture detail · {a['id']}",
         active="Architecture List",
         back_href="/architecture",
