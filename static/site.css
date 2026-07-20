@@ -110,6 +110,7 @@ a:hover {
   max-width: none;
   padding-left: 0;
   padding-right: 0;
+  padding-bottom: 1.5rem;
 }
 
 .site-hint {
@@ -499,8 +500,10 @@ button.remove-link:disabled {
 
 .site-footer {
   margin-top: auto;
+  flex-shrink: 0;
   padding: 1.25rem 1.5rem 1.75rem;
   border-top: 1px solid var(--line);
+  background: rgba(16, 21, 28, 0.96);
   color: var(--muted);
   font-size: 0.82rem;
   line-height: 1.5;

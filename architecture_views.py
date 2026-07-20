@@ -21,8 +21,8 @@ OUTLOOK_COLORS = {
 
 DIAGRAM_EXTRA_CSS = """
 #cy {
-  height: calc(100vh - 140px);
-  min-height: 520px;
+  height: min(68vh, 720px);
+  min-height: 420px;
 }
 """
 

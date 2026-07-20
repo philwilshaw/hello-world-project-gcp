@@ -116,3 +116,23 @@ def render_page(
         extra_css=extra_css,
         extra_js=extra_js,
     )
+
+
+def register_layout(app) -> None:
+    """Ensure HTML responses include the shared footer."""
+
+    @app.after_request
+    def ensure_site_footer(response):
+        if response.status_code != 200:
+            return response
+        content_type = response.content_type or ""
+        if not content_type.startswith("text/html"):
+            return response
+        if response.direct_passthrough:
+            return response
+        html = response.get_data(as_text=True)
+        if "</body>" in html and "site-footer" not in html:
+            response.set_data(
+                html.replace("</body>", f"{render_footer()}\n</body>", 1)
+            )
+        return response
