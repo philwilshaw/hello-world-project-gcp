@@ -32,6 +32,85 @@ from ui import esc, render_page
 
 catalog_bp = Blueprint("catalog", __name__)
 
+SORTABLE_TABLE_CSS = """
+.sortable-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.sortable-table th.sortable:hover {
+  color: var(--accent);
+}
+.sortable-table th.sortable .sort-indicator {
+  display: inline-block;
+  margin-left: 0.3rem;
+  opacity: 0.45;
+  font-size: 0.85em;
+}
+.sortable-table th.sortable.sorted-asc .sort-indicator,
+.sortable-table th.sortable.sorted-desc .sort-indicator {
+  opacity: 1;
+  color: var(--accent);
+}
+.sortable-table th.sortable.sorted-asc .sort-indicator::after { content: "▲"; }
+.sortable-table th.sortable.sorted-desc .sort-indicator::after { content: "▼"; }
+.sortable-table th.sortable:not(.sorted-asc):not(.sorted-desc) .sort-indicator::after { content: "↕"; }
+"""
+
+SORTABLE_TABLE_JS = r"""
+<script>
+  (function () {
+    const table = document.querySelector("table.sortable-table");
+    if (!table) return;
+    const tbody = table.tBodies[0];
+    if (!tbody) return;
+    let sortCol = -1;
+    let sortDir = 1;
+
+    function cellValue(row, index) {
+      const cell = row.cells[index];
+      if (!cell) return "";
+      if (cell.dataset.sort !== undefined) return cell.dataset.sort;
+      return (cell.textContent || "").trim();
+    }
+
+    function compare(a, b, index) {
+      const av = cellValue(a, index);
+      const bv = cellValue(b, index);
+      const an = Number(av);
+      const bn = Number(bv);
+      if (av !== "" && bv !== "" && !Number.isNaN(an) && !Number.isNaN(bn)) {
+        return an - bn;
+      }
+      return String(av).localeCompare(String(bv), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    }
+
+    table.querySelectorAll("thead th.sortable").forEach((th, index) => {
+      th.addEventListener("click", () => {
+        if (sortCol === index) {
+          sortDir = -sortDir;
+        } else {
+          sortCol = index;
+          sortDir = 1;
+        }
+        table.querySelectorAll("thead th.sortable").forEach((header) => {
+          header.classList.remove("sorted-asc", "sorted-desc");
+        });
+        th.classList.add(sortDir === 1 ? "sorted-asc" : "sorted-desc");
+        const rows = Array.from(tbody.rows).filter(
+          (row) => !row.classList.contains("empty") && row.cells.length > 1
+        );
+        rows.sort((a, b) => compare(a, b, index) * sortDir);
+        rows.forEach((row) => tbody.appendChild(row));
+      });
+    });
+  })();
+</script>
+"""
+
 LINK_SCRIPT = r"""
 <script>
   function parseSelectedId(raw) {
@@ -219,10 +298,11 @@ def _link_form(
     """
 
 
-def _list_page(*, title, subtitle, active, table_head, table_body, wide=False):
+def _list_page(*, title, subtitle, active, table_head, table_body, wide=False, sortable=False):
+    table_class = ' class="sortable-table"' if sortable else ""
     body = f"""
     <div class="table-wrap">
-      <table>
+      <table{table_class}>
         <thead><tr>{table_head}</tr></thead>
         <tbody>{table_body}</tbody>
       </table>
@@ -234,6 +314,8 @@ def _list_page(*, title, subtitle, active, table_head, table_body, wide=False):
         active=active,
         body=body,
         wide=wide,
+        extra_css=SORTABLE_TABLE_CSS if sortable else "",
+        extra_js=SORTABLE_TABLE_JS if sortable else "",
     )
 
 
@@ -529,22 +611,29 @@ def projects_list():
               <td><a class="title-link" href="/projects/{_esc(p['id'])}">{_esc(p['title'])}</a></td>
               <td>{_esc(p['description'])}</td>
               <td>{_esc(p.get('budget_status', '—'))}</td>
-              <td>{_esc(p['start_date'])}</td>
-              <td>{_esc(p['end_date'])}</td>
+              <td data-sort="{_esc(p['start_date'])}">{_esc(p['start_date'])}</td>
+              <td data-sort="{_esc(p['end_date'])}">{_esc(p['end_date'])}</td>
               <td><span class="rag {_esc(p['rag_status'])}">{_esc(p['rag_status'])}</span></td>
-              <td>{_esc(_money(p['capex_gbp']))}</td>
-              <td>{_esc(_money(p['opex_gbp']))}</td>
+              <td data-sort="{float(p['capex_gbp'])}">{_esc(_money(p['capex_gbp']))}</td>
+              <td data-sort="{float(p['opex_gbp'])}">{_esc(_money(p['opex_gbp']))}</td>
             </tr>
             """
         )
     return _list_page(
         title="Project List",
-        subtitle="All projects from the projects table",
+        subtitle="All projects from the projects table · click a column header to sort",
         active="Project List",
+        sortable=True,
         table_head="""
-          <th>ID</th><th>Title</th><th>Description</th>
-          <th>Budget status</th><th>Start</th><th>End</th>
-          <th>RAG</th><th>Capex</th><th>Opex</th>
+          <th class="sortable">ID <span class="sort-indicator"></span></th>
+          <th class="sortable">Title <span class="sort-indicator"></span></th>
+          <th class="sortable">Description <span class="sort-indicator"></span></th>
+          <th class="sortable">Budget status <span class="sort-indicator"></span></th>
+          <th class="sortable">Start <span class="sort-indicator"></span></th>
+          <th class="sortable">End <span class="sort-indicator"></span></th>
+          <th class="sortable">RAG <span class="sort-indicator"></span></th>
+          <th class="sortable">Capex <span class="sort-indicator"></span></th>
+          <th class="sortable">Opex <span class="sort-indicator"></span></th>
         """,
         table_body="".join(body_rows)
         or '<tr><td colspan="9" class="empty">No projects</td></tr>',
