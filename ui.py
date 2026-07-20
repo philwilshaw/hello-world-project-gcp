@@ -28,6 +28,7 @@ NAV_DROPDOWNS = [
             ("/architecture", "Architecture List"),
             ("/architecture/diagram", "Architecture Diagram"),
             ("/architecture/capabilities", "Architecture Model"),
+            ("/architecture/roadmap", "Architecture Roadmap"),
         ],
     },
     {
