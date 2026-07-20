@@ -125,11 +125,12 @@ HOME_CARDS = [
 
 HOME_CSS = """
 .home-intro {
-  max-width: 46rem;
   margin: 0 0 1.75rem;
   color: var(--muted);
   font-size: 1.05rem;
   line-height: 1.55;
+  max-width: none;
+  width: 100%;
 }
 .home-intro strong {
   color: var(--text);
