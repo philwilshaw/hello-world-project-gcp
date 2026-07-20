@@ -36,13 +36,14 @@ def hello():
 
     body = f"""
 <div class="prose">
-<p><strong>Environment:</strong> {env}</p>
+<p class="welcome">Welcome to the demo site</p>
 
 <div class="panel">
   <div class="status-row">
     <span>Database writes: <span class="pill {pill_class}">{esc(writes_label)}</span></span>
     <span>Last safe copy: <strong>{esc(safe_label)}</strong></span>
     <span>Bucket: <strong>{esc(bucket)}</strong></span>
+    <span>Environment: <strong>{env}</strong></span>
   </div>
   <p class="note">
     Link add/remove controls are disabled when changes are locked.
@@ -258,7 +259,7 @@ I started with no experience and now I can:
 
     return render_page(
         title="My First Cloud Deployment Project",
-        subtitle="Welcome to the demo site",
+        subtitle="",
         active="Home",
         body=body,
         extra_js=restore_js,
