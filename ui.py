@@ -11,6 +11,7 @@ from flask import render_template_string
 
 NAV_ITEMS = [
     ("/", "Home"),
+    ("/zones", "Zones"),
     ("/diagram", "Timeline"),
     ("/projects", "Projects"),
     ("/risks", "Risks"),

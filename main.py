@@ -9,6 +9,7 @@ from catalog import catalog_bp
 from db import get_db_status, init_db
 from diagram import diagram_bp
 from sitemap import sitemap_bp
+from zones import zones_bp
 from ui import esc, register_layout, render_page
 
 app = Flask(__name__)
@@ -17,6 +18,7 @@ app.register_blueprint(architecture_roadmap_bp)
 app.register_blueprint(architecture_views_bp)
 app.register_blueprint(catalog_bp)
 app.register_blueprint(sitemap_bp)
+app.register_blueprint(zones_bp)
 app.register_blueprint(admin_bp)
 register_layout(app)
 init_db()

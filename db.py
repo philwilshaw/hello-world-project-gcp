@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "local").strip() or "local"
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # Prefer explicit bucket; otherwise derive a per-environment default name when
 # running in GCP-style envs. Local keeps files on disk only unless overridden.
@@ -275,11 +275,40 @@ def init_db():
                 DROP TABLE IF EXISTS architecture_components;
                 DROP TABLE IF EXISTS risks;
                 DROP TABLE IF EXISTS projects;
+                DROP TABLE IF EXISTS capabilities;
+                DROP TABLE IF EXISTS sub_zones;
+                DROP TABLE IF EXISTS zones;
                 """
             )
 
         conn.executescript(
             """
+            CREATE TABLE IF NOT EXISTS zones (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                owner_name TEXT NOT NULL,
+                owner_image TEXT NOT NULL,
+                description TEXT NOT NULL,
+                sort_order INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS sub_zones (
+                id TEXT PRIMARY KEY,
+                zone_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                sort_order INTEGER NOT NULL,
+                FOREIGN KEY (zone_id) REFERENCES zones(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS capabilities (
+                id TEXT PRIMARY KEY,
+                sub_zone_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                level TEXT NOT NULL DEFAULT 'L3',
+                sort_order INTEGER NOT NULL,
+                FOREIGN KEY (sub_zone_id) REFERENCES sub_zones(id)
+            );
+
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -290,7 +319,9 @@ def init_db():
                 rag_status TEXT NOT NULL,
                 capex_gbp REAL NOT NULL,
                 opex_gbp REAL NOT NULL,
-                CHECK (start_date < end_date)
+                sub_zone_id TEXT NOT NULL,
+                CHECK (start_date < end_date),
+                FOREIGN KEY (sub_zone_id) REFERENCES sub_zones(id)
             );
 
             CREATE TABLE IF NOT EXISTS risks (
@@ -299,7 +330,9 @@ def init_db():
                 description TEXT NOT NULL,
                 impact TEXT NOT NULL,
                 proximity TEXT NOT NULL,
-                value TEXT NOT NULL
+                value TEXT NOT NULL,
+                sub_zone_id TEXT NOT NULL,
+                FOREIGN KEY (sub_zone_id) REFERENCES sub_zones(id)
             );
 
             CREATE TABLE IF NOT EXISTS architecture_components (
@@ -312,7 +345,11 @@ def init_db():
                 outlook TEXT NOT NULL,
                 implemented_date TEXT,
                 go_live_date TEXT,
-                decommissioned_date TEXT
+                decommissioned_date TEXT,
+                sub_zone_id TEXT NOT NULL,
+                capability_id TEXT NOT NULL,
+                FOREIGN KEY (sub_zone_id) REFERENCES sub_zones(id),
+                FOREIGN KEY (capability_id) REFERENCES capabilities(id)
             );
 
             -- Links projects to risks or architecture components.
@@ -365,13 +402,73 @@ def init_db():
         set_writes_enabled(True)
 
 
+def _seed_zones(conn):
+    """Load zones, sub-zones, and L3 capabilities; return lookup maps."""
+    from zones_data import ZONES
+
+    sub_zone_by_name = {}
+    capability_by_pair = {}
+
+    for zone_index, zone in enumerate(ZONES, start=1):
+        conn.execute(
+            """
+            INSERT INTO zones (
+                id, name, owner_name, owner_image, description, sort_order
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                zone["id"],
+                zone["name"],
+                zone["owner_name"],
+                zone["owner_image"],
+                zone["description"],
+                zone_index,
+            ),
+        )
+        for sub_index, sub_zone in enumerate(zone["sub_zones"], start=1):
+            sub_zone_id = f"{zone['id']}-sz{sub_index}"
+            conn.execute(
+                """
+                INSERT INTO sub_zones (id, zone_id, name, sort_order)
+                VALUES (?, ?, ?, ?)
+                """,
+                (sub_zone_id, zone["id"], sub_zone["name"], sub_index),
+            )
+            sub_zone_by_name[sub_zone["name"]] = sub_zone_id
+            for cap_index, capability_name in enumerate(
+                sub_zone["capabilities"], start=1
+            ):
+                capability_id = f"{sub_zone_id}-c{cap_index}"
+                conn.execute(
+                    """
+                    INSERT INTO capabilities (
+                        id, sub_zone_id, name, level, sort_order
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (capability_id, sub_zone_id, capability_name, "L3", cap_index),
+                )
+                capability_by_pair[(sub_zone["name"], capability_name)] = (
+                    capability_id
+                )
+
+    return sub_zone_by_name, capability_by_pair
+
+
 def _seed(conn):
+    from zones_data import (
+        ARCHITECTURE_ASSIGNMENTS,
+        PROJECT_SUB_ZONES,
+        RISK_SUB_ZONES,
+    )
+
+    sub_zone_by_name, capability_by_pair = _seed_zones(conn)
+
     conn.executemany(
         """
         INSERT INTO projects (
             id, title, description, accountable_contact_name,
-            start_date, end_date, rag_status, capex_gbp, opex_gbp
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            start_date, end_date, rag_status, capex_gbp, opex_gbp, sub_zone_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -384,6 +481,7 @@ def _seed(conn):
                 "Amber",
                 180000.00,
                 42000.00,
+                sub_zone_by_name[PROJECT_SUB_ZONES["p1"]],
             ),
             (
                 "p2",
@@ -395,6 +493,7 @@ def _seed(conn):
                 "Green",
                 320000.00,
                 75000.00,
+                sub_zone_by_name[PROJECT_SUB_ZONES["p2"]],
             ),
             (
                 "p3",
@@ -406,14 +505,17 @@ def _seed(conn):
                 "Red",
                 95000.00,
                 28000.00,
+                sub_zone_by_name[PROJECT_SUB_ZONES["p3"]],
             ),
         ],
     )
 
     conn.executemany(
         """
-        INSERT INTO risks (id, title, description, impact, proximity, value)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO risks (
+            id, title, description, impact, proximity, value, sub_zone_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -423,6 +525,7 @@ def _seed(conn):
                 "High — damages trust and conversion across public channels.",
                 "Immediate — customer feedback already cites confusing content.",
                 "Estimated brand and conversion impact around £120,000 a year.",
+                sub_zone_by_name[RISK_SUB_ZONES["r1"]],
             ),
             (
                 "r2",
@@ -431,6 +534,7 @@ def _seed(conn):
                 "Medium — keeps operating cost and queue times elevated.",
                 "Near-term — volumes rise further during seasonal peaks.",
                 "Avoidable support cost estimated at £90,000 a year.",
+                sub_zone_by_name[RISK_SUB_ZONES["r2"]],
             ),
             (
                 "r3",
@@ -439,6 +543,7 @@ def _seed(conn):
                 "High — absence would slow several corporate change programmes.",
                 "Ongoing until knowledge is shared and documented.",
                 "Contingency cover and delay exposure roughly £45,000.",
+                sub_zone_by_name[RISK_SUB_ZONES["r3"]],
             ),
             (
                 "r4",
@@ -447,135 +552,152 @@ def _seed(conn):
                 "High — audit and decision-making risk if systems fail.",
                 "Closer to year-end reporting cycles in early 2027.",
                 "Potential remediation and audit cost near £150,000.",
+                sub_zone_by_name[RISK_SUB_ZONES["r4"]],
             ),
         ],
     )
+
+    def _arch_row(
+        arch_id,
+        title,
+        description,
+        component_type,
+        owner,
+        outlook,
+        implemented_date,
+        go_live_date,
+        decommissioned_date,
+    ):
+        sub_zone_name, capability_name = ARCHITECTURE_ASSIGNMENTS[arch_id]
+        return (
+            arch_id,
+            title,
+            description,
+            component_type,
+            owner,
+            capability_name,
+            outlook,
+            implemented_date,
+            go_live_date,
+            decommissioned_date,
+            sub_zone_by_name[sub_zone_name],
+            capability_by_pair[(sub_zone_name, capability_name)],
+        )
 
     conn.executemany(
         """
         INSERT INTO architecture_components (
             id, title, description, component_type, owner, capability, outlook,
-            implemented_date, go_live_date, decommissioned_date
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            implemented_date, go_live_date, decommissioned_date,
+            sub_zone_id, capability_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
-            (
+            _arch_row(
                 "a1",
                 "Public Website",
                 "Customer-facing web presence and content delivery stack.",
                 "Application",
                 "Digital Channels",
-                "Customer Channels",
                 "upgrade",
                 "2020-01-15",
                 "2020-06-01",
                 None,
             ),
-            (
+            _arch_row(
                 "a2",
                 "Mobile Banking App",
                 "iOS and Android app for authenticated customer journeys.",
                 "Application",
                 "Digital Channels",
-                "Customer Channels",
                 "to be implemented",
-                # Filled from Mobile App Launch project edge where possible.
                 None,
                 None,
                 None,
             ),
-            (
+            _arch_row(
                 "a3",
                 "Customer API Gateway",
                 "API layer used by web and mobile channels.",
                 "Integration",
                 "Platform Engineering",
-                "Integration",
                 "continue",
                 "2023-01-10",
                 "2023-06-30",
                 None,
             ),
-            (
+            _arch_row(
                 "a4",
                 "Legacy Finance Ledger",
                 "On-premise finance system due to be retired after migration.",
                 "System",
                 "Finance Technology",
-                "Finance Systems",
                 "to be decommissioned",
                 "2015-03-01",
                 "2015-09-01",
-                # Decommission date filled from Data Migration project edge.
                 None,
             ),
-            (
+            _arch_row(
                 "a5",
                 "Cloud Finance Warehouse",
                 "Target cloud data platform for finance reporting.",
                 "Data Platform",
                 "Data Engineering",
-                "Data & Analytics",
                 "to be implemented",
                 None,
                 None,
                 None,
             ),
-            (
+            _arch_row(
                 "a6",
                 "Contact Centre Desktop",
                 "Agent desktop used for phone-based customer support.",
                 "Application",
                 "Customer Operations",
-                "Customer Channels",
                 "continue",
                 "2019-02-01",
                 "2019-08-15",
                 None,
             ),
-            (
+            _arch_row(
                 "a7",
                 "Batch File Hub",
                 "Legacy overnight file transfer service between channels and finance.",
                 "Integration",
                 "Platform Engineering",
-                "Integration",
                 "to be decommissioned",
                 "2016-05-01",
                 "2016-11-01",
                 None,
             ),
-            (
+            _arch_row(
                 "a8",
                 "Event Streaming Bus",
                 "Near-real-time event backbone replacing batch file transfers.",
                 "Integration",
                 "Platform Engineering",
-                "Integration",
                 "upgrade",
                 "2025-01-15",
                 "2025-09-01",
                 None,
             ),
-            (
+            _arch_row(
                 "a9",
                 "On-prem Reporting Mart",
                 "Historic reporting database retained only for audit archive access.",
                 "Data Platform",
                 "Data Engineering",
-                "Data & Analytics",
                 "decommissioned",
                 "2014-04-01",
                 "2014-10-01",
                 "2024-12-31",
             ),
-            (
+            _arch_row(
                 "a10",
                 "Identity Service",
                 "Central authentication and authorisation for customer apps.",
                 "Platform",
                 "Security Engineering",
-                "Customer Channels",
                 "continue",
                 "2022-01-01",
                 "2022-06-01",
@@ -898,6 +1020,11 @@ def fetch_project_detail(project_id):
         if project is None:
             return None
 
+        zone_ctx = fetch_sub_zone_context(conn, project["sub_zone_id"])
+        project_dict = dict(project)
+        if zone_ctx:
+            project_dict.update(zone_ctx)
+
         linked_risks = [
             dict(row)
             for row in conn.execute(
@@ -926,7 +1053,7 @@ def fetch_project_detail(project_id):
         ]
 
     return {
-        "project": dict(project),
+        "project": project_dict,
         "linked_risks": linked_risks,
         "linked_architecture": linked_architecture,
     }
@@ -941,6 +1068,11 @@ def fetch_risk_detail(risk_id):
         ).fetchone()
         if risk is None:
             return None
+
+        zone_ctx = fetch_sub_zone_context(conn, risk["sub_zone_id"])
+        risk_dict = dict(risk)
+        if zone_ctx:
+            risk_dict.update(zone_ctx)
 
         linked_projects = [
             dict(row)
@@ -957,7 +1089,7 @@ def fetch_risk_detail(risk_id):
         ]
 
     return {
-        "risk": dict(risk),
+        "risk": risk_dict,
         "linked_projects": linked_projects,
     }
 
@@ -972,6 +1104,11 @@ def fetch_architecture_detail(architecture_id):
         ).fetchone()
         if component is None:
             return None
+
+        zone_ctx = fetch_sub_zone_context(conn, component["sub_zone_id"])
+        component_dict = dict(component)
+        if zone_ctx:
+            component_dict.update(zone_ctx)
 
         linked_projects = [
             dict(row)
@@ -988,7 +1125,7 @@ def fetch_architecture_detail(architecture_id):
         ]
 
     return {
-        "architecture": dict(component),
+        "architecture": component_dict,
         "linked_projects": linked_projects,
     }
 
@@ -1077,3 +1214,98 @@ def remove_link(edge_id):
 
     persist_db()
     return True, "deleted"
+
+
+def fetch_sub_zone_context(conn, sub_zone_id):
+    """Return zone and sub-zone labels for a sub_zone_id."""
+    row = conn.execute(
+        """
+        SELECT
+            z.id AS zone_id,
+            z.name AS zone_name,
+            z.owner_name,
+            sz.id AS sub_zone_id,
+            sz.name AS sub_zone_name
+        FROM sub_zones sz
+        JOIN zones z ON z.id = sz.zone_id
+        WHERE sz.id = ?
+        """,
+        (sub_zone_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def fetch_zones_tree():
+    """Return zones with nested sub-zones, capabilities, and entity counts."""
+    init_db()
+    with get_connection() as conn:
+        zones = [
+            dict(row)
+            for row in conn.execute(
+                "SELECT * FROM zones ORDER BY sort_order, id"
+            )
+        ]
+        sub_zones = [
+            dict(row)
+            for row in conn.execute(
+                "SELECT * FROM sub_zones ORDER BY zone_id, sort_order, id"
+            )
+        ]
+        capabilities = [
+            dict(row)
+            for row in conn.execute(
+                "SELECT * FROM capabilities ORDER BY sub_zone_id, sort_order, id"
+            )
+        ]
+
+        def count_map(table):
+            return {
+                row["sub_zone_id"]: row["count"]
+                for row in conn.execute(
+                    f"""
+                    SELECT sub_zone_id, COUNT(*) AS count
+                    FROM {table}
+                    GROUP BY sub_zone_id
+                    """
+                )
+            }
+
+        project_counts = count_map("projects")
+        risk_counts = count_map("risks")
+        architecture_counts = count_map("architecture_components")
+
+        caps_by_sub_zone = {}
+        for capability in capabilities:
+            caps_by_sub_zone.setdefault(capability["sub_zone_id"], []).append(
+                capability
+            )
+
+        subs_by_zone = {}
+        for sub_zone in sub_zones:
+            sub_zone["capabilities"] = caps_by_sub_zone.get(sub_zone["id"], [])
+            sub_zone["project_count"] = project_counts.get(sub_zone["id"], 0)
+            sub_zone["risk_count"] = risk_counts.get(sub_zone["id"], 0)
+            sub_zone["architecture_count"] = architecture_counts.get(
+                sub_zone["id"], 0
+            )
+            subs_by_zone.setdefault(sub_zone["zone_id"], []).append(sub_zone)
+
+        for zone in zones:
+            zone_subs = subs_by_zone.get(zone["id"], [])
+            zone["sub_zones"] = zone_subs
+            zone["sub_zone_count"] = len(zone_subs)
+            zone["capability_count"] = sum(
+                len(sub_zone["capabilities"]) for sub_zone in zone_subs
+            )
+            zone["project_count"] = sum(
+                sub_zone["project_count"] for sub_zone in zone_subs
+            )
+            zone["risk_count"] = sum(
+                sub_zone["risk_count"] for sub_zone in zone_subs
+            )
+            zone["architecture_count"] = sum(
+                sub_zone["architecture_count"] for sub_zone in zone_subs
+            )
+
+    return {"zones": zones}
+

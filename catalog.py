@@ -405,6 +405,8 @@ def project_detail(project_id):
       <dt>Title</dt><dd>{_esc(p['title'])}</dd>
       <dt>Description</dt><dd>{_esc(p['description'])}</dd>
       <dt>Accountable contact</dt><dd>{_esc(p['accountable_contact_name'])}</dd>
+      <dt>Sub-zone</dt><dd>{_esc(p.get('sub_zone_name', '—'))}</dd>
+      <dt>Zone</dt><dd>{_esc(p.get('zone_name', '—'))}</dd>
       <dt>Start date</dt><dd>{_esc(p['start_date'])}</dd>
       <dt>End date</dt><dd>{_esc(p['end_date'])}</dd>
       <dt>RAG status</dt><dd><span class="rag {_esc(p['rag_status'])}">{_esc(p['rag_status'])}</span></dd>
@@ -480,6 +482,8 @@ def risk_detail(risk_id):
       <dt>ID</dt><dd>{_esc(r['id'])}</dd>
       <dt>Title</dt><dd>{_esc(r['title'])}</dd>
       <dt>Description</dt><dd>{_esc(r['description'])}</dd>
+      <dt>Sub-zone</dt><dd>{_esc(r.get('sub_zone_name', '—'))}</dd>
+      <dt>Zone</dt><dd>{_esc(r.get('zone_name', '—'))}</dd>
       <dt>Impact</dt><dd>{_esc(r['impact'])}</dd>
       <dt>Proximity</dt><dd>{_esc(r['proximity'])}</dd>
       <dt>Value</dt><dd>{_esc(r['value'])}</dd>
@@ -546,6 +550,8 @@ def architecture_detail(architecture_id):
       <dt>Description</dt><dd>{_esc(a['description'])}</dd>
       <dt>Component type</dt><dd>{_esc(a['component_type'])}</dd>
       <dt>Owner</dt><dd>{_esc(a['owner'])}</dd>
+      <dt>Sub-zone</dt><dd>{_esc(a.get('sub_zone_name', '—'))}</dd>
+      <dt>Zone</dt><dd>{_esc(a.get('zone_name', '—'))}</dd>
       <dt>Capability</dt><dd>{_esc(a['capability'])}</dd>
       <dt>Arch outlook</dt><dd>{_esc(a['outlook'])}</dd>
       <dt>Implemented</dt><dd>{_esc(a.get('implemented_date') or '—')}</dd>
