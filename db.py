@@ -1113,14 +1113,16 @@ COST_YEARS = (2026, 2027, 2028, 2029)
 
 def fetch_cost_dashboard():
     """
-    Aggregate budget cost by zone and year, plus top projects for 2026/2027.
+    Aggregate budget cost by zone and year, plus top projects, contracts, and risks.
 
     Returns:
       {
         years: [2026, ...],
-        zones: [{zone_name, years: {2026: {capex, opex, total}, ...}, totals: {...}}],
-        grand_total: {years: {...}, overall: {capex, opex, total}},
+        zones: [...],
+        grand_total: {...},
         top_projects: {2026: [...], 2027: [...]},
+        top_run_contracts: [...],
+        top_risks: [...],
       }
     """
     init_db()
@@ -1159,6 +1161,34 @@ def fetch_cost_dashboard():
                     b.capex_2029, b.opex_2029
                 FROM projects p
                 JOIN budgets b ON b.budget_id = p.budget_id
+                """
+            )
+        ]
+        run_contract_rows = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT
+                    rc.fin_id,
+                    rc.contract_name,
+                    rc.vendor_name,
+                    rc.contract_status,
+                    b.capex_2026, b.opex_2026,
+                    b.capex_2027, b.opex_2027,
+                    b.capex_2028, b.opex_2028,
+                    b.capex_2029, b.opex_2029
+                FROM run_contracts rc
+                JOIN budgets b ON b.budget_id = rc.linked_budget_id
+                """
+            )
+        ]
+        risk_rows = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT id, name, risk_score, status, category
+                FROM risks
+                ORDER BY risk_score DESC, id
                 """
             )
         ]
@@ -1230,11 +1260,44 @@ def fetch_cost_dashboard():
         ranked.sort(key=lambda p: (-p["total"], p["id"]))
         top_projects[year] = ranked[:10]
 
+    top_run_contracts = []
+    for contract in run_contract_rows:
+        total = 0.0
+        for year in COST_YEARS:
+            total += float(contract.get(f"capex_{year}") or 0)
+            total += float(contract.get(f"opex_{year}") or 0)
+        if total <= 0:
+            continue
+        top_run_contracts.append(
+            {
+                "id": contract["fin_id"],
+                "title": contract["contract_name"],
+                "vendor_name": contract["vendor_name"],
+                "contract_status": contract["contract_status"],
+                "total": total,
+            }
+        )
+    top_run_contracts.sort(key=lambda c: (-c["total"], c["id"]))
+    top_run_contracts = top_run_contracts[:10]
+
+    top_risks = [
+        {
+            "id": risk["id"],
+            "title": risk["name"],
+            "risk_score": int(risk["risk_score"] or 0),
+            "status": risk["status"],
+            "category": risk["category"],
+        }
+        for risk in risk_rows
+    ][:10]
+
     return {
         "years": list(COST_YEARS),
         "zones": zones,
         "grand_total": grand,
         "top_projects": top_projects,
+        "top_run_contracts": top_run_contracts,
+        "top_risks": top_risks,
     }
 
 

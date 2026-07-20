@@ -391,29 +391,29 @@ def _chart_html(data):
     return f'<div class="chart-wrap"><div class="zone-chart">{"".join(groups)}</div></div>'
 
 
-def _top_list_html(year, projects):
-    if not projects:
+def _top_list_html(*, heading, items, empty_label, href_prefix, value_key, value_format):
+    if not items:
         return f"""
         <div class="top-card">
-          <h3>Top 10 projects · {esc(year)}</h3>
-          <p class="empty">No project spend in {esc(year)}</p>
+          <h3>{esc(heading)}</h3>
+          <p class="empty">{esc(empty_label)}</p>
         </div>
         """
-    items = []
-    for index, project in enumerate(projects, start=1):
-        items.append(
+    rows = []
+    for index, item in enumerate(items, start=1):
+        rows.append(
             f"""
             <li>
               <span class="rank">{index}</span>
-              <a class="title-link" href="/projects/{esc(project['id'])}">{esc(project['title'])}</a>
-              <span class="amount">{esc(_money(project['total']))}</span>
+              <a class="title-link" href="{esc(href_prefix)}{esc(item['id'])}">{esc(item['title'])}</a>
+              <span class="amount">{esc(value_format(item[value_key]))}</span>
             </li>
             """
         )
     return f"""
     <div class="top-card">
-      <h3>Top 10 projects · {esc(year)}</h3>
-      <ol class="top-list">{"".join(items)}</ol>
+      <h3>{esc(heading)}</h3>
+      <ol class="top-list">{"".join(rows)}</ol>
     </div>
     """
 
@@ -442,16 +442,46 @@ def cost_dashboard_page():
     </section>
 
     <section class="cost-section">
-      <h2>Most expensive projects</h2>
+      <h2>Top lists</h2>
       <div class="top-lists">
-        {_top_list_html(2026, data["top_projects"][2026])}
-        {_top_list_html(2027, data["top_projects"][2027])}
+        {_top_list_html(
+            heading="Top 10 projects · 2026",
+            items=data["top_projects"][2026],
+            empty_label="No project spend in 2026",
+            href_prefix="/projects/",
+            value_key="total",
+            value_format=_money,
+        )}
+        {_top_list_html(
+            heading="Top 10 projects · 2027",
+            items=data["top_projects"][2027],
+            empty_label="No project spend in 2027",
+            href_prefix="/projects/",
+            value_key="total",
+            value_format=_money,
+        )}
+        {_top_list_html(
+            heading="Top 10 run contracts by value",
+            items=data["top_run_contracts"],
+            empty_label="No run contract spend",
+            href_prefix="/run-contracts/",
+            value_key="total",
+            value_format=_money,
+        )}
+        {_top_list_html(
+            heading="Top 10 risks by risk score",
+            items=data["top_risks"],
+            empty_label="No risks",
+            href_prefix="/risks/",
+            value_key="risk_score",
+            value_format=lambda score: f"Score {score}/10",
+        )}
       </div>
     </section>
     """
     return render_page(
         title="Cost Dashboard",
-        subtitle="Budget spend by zone and year · stacked Capex / Opex · top projects",
+        subtitle="Budget spend by zone and year · stacked Capex / Opex · top projects, contracts, and risks",
         active="Cost Dashboard",
         body=body,
         extra_css=EXTRA_CSS,
