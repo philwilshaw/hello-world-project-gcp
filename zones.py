@@ -295,11 +295,11 @@ def zones_page():
 <div class="zones-controls">
   <span>Show:</span>
   <label for="zones-show-l2">
-    <input type="checkbox" id="zones-show-l2" checked />
+    <input type="checkbox" id="zones-show-l2" />
     L2 sub-zones
   </label>
   <label for="zones-show-l3">
-    <input type="checkbox" id="zones-show-l3" checked />
+    <input type="checkbox" id="zones-show-l3" />
     L3 capabilities
   </label>
 </div>
