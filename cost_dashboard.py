@@ -128,62 +128,49 @@ EXTRA_CSS = r"""
   border: 1px solid var(--line);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.02);
-  padding: 1rem 1rem 0.75rem;
-  overflow-x: auto;
+  padding: 0.85rem 0.75rem 0.7rem;
+  overflow: visible;
 }
 
 .zone-chart {
   display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 0.55rem;
+  width: 100%;
+}
+
+.zone-group {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
   flex-direction: column;
-  gap: 1.1rem;
-  min-width: 720px;
-}
-
-.zone-chart-row {
-  display: grid;
-  grid-template-columns: 170px 1fr;
-  gap: 0.85rem;
-  align-items: end;
-}
-
-.zone-chart-label {
-  font-size: 0.8rem;
-  color: var(--muted);
-  line-height: 1.3;
-  padding-bottom: 0.35rem;
-}
-
-.zone-chart-label strong {
-  display: block;
-  color: var(--text);
-  font-size: 0.88rem;
-  margin-bottom: 0.15rem;
+  align-items: stretch;
 }
 
 .year-bars {
   display: flex;
   align-items: flex-end;
-  gap: 0.7rem;
-  min-height: 160px;
-  padding-bottom: 1.35rem;
-  border-bottom: 1px solid rgba(43, 58, 77, 0.65);
+  justify-content: space-between;
+  gap: 0.18rem;
+  min-height: 150px;
 }
 
 .year-bar-group {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  min-width: 0;
 }
 
 .year-bar-stack {
   width: 100%;
-  max-width: 58px;
+  max-width: 34px;
   display: flex;
   flex-direction: column-reverse;
-  border-radius: 6px 6px 2px 2px;
+  border-radius: 5px 5px 2px 2px;
   overflow: hidden;
   min-height: 2px;
   box-shadow: inset 0 0 0 1px rgba(16, 21, 28, 0.25);
@@ -193,17 +180,34 @@ EXTRA_CSS = r"""
 .seg-opex { background: linear-gradient(180deg, #9be0d2, #7dd3c0); }
 
 .year-bar-value {
-  font-size: 0.68rem;
+  font-size: 0.58rem;
   font-weight: 650;
   color: var(--text);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.18rem;
   white-space: nowrap;
+  line-height: 1;
 }
 
 .year-bar-caption {
-  margin-top: 0.35rem;
-  font-size: 0.68rem;
+  margin-top: 0.28rem;
+  font-size: 0.62rem;
   color: var(--muted);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.zone-caption {
+  margin-top: 0.4rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgba(43, 58, 77, 0.75);
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 650;
+  color: var(--text);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .top-lists {
@@ -267,7 +271,6 @@ EXTRA_CSS = r"""
 
 @media (max-width: 860px) {
   .top-lists { grid-template-columns: 1fr; }
-  .zone-chart-row { grid-template-columns: 1fr; }
 }
 """
 
@@ -343,19 +346,20 @@ def _chart_html(data):
     max_total = max(max_total, 1.0)
     chart_px = 140
 
-    rows = []
+    groups = []
     for zone in data["zones"]:
         bars = []
         for year in data["years"]:
             y = zone["years"][year]
             total = y["total"]
+            year_label = str(year)
             if total <= 0:
                 bars.append(
                     f"""
-                    <div class="year-bar-group">
+                    <div class="year-bar-group" title="{esc(zone['zone_name'])} · {esc(year_label)} · £0.0m">
                       <div class="year-bar-value">£0.0m</div>
                       <div class="year-bar-stack" style="height:2px"></div>
-                      <div class="year-bar-caption">{esc(year)}</div>
+                      <div class="year-bar-caption">{esc(year_label)}</div>
                     </div>
                     """
                 )
@@ -365,29 +369,26 @@ def _chart_html(data):
             opex_h = max(height - capex_h, 0)
             bars.append(
                 f"""
-                <div class="year-bar-group" title="Capex {esc(_money(y['capex']))} · Opex {esc(_money(y['opex']))}">
+                <div class="year-bar-group" title="{esc(zone['zone_name'])} · {esc(year_label)} · Capex {esc(_money(y['capex']))} · Opex {esc(_money(y['opex']))}">
                   <div class="year-bar-value">{esc(_millions(total))}</div>
                   <div class="year-bar-stack" style="height:{height}px">
                     <div class="seg-capex" style="height:{capex_h}px"></div>
                     <div class="seg-opex" style="height:{opex_h}px"></div>
                   </div>
-                  <div class="year-bar-caption">{esc(year)}</div>
+                  <div class="year-bar-caption">{esc(year_label)}</div>
                 </div>
                 """
             )
-        rows.append(
+        groups.append(
             f"""
-            <div class="zone-chart-row">
-              <div class="zone-chart-label">
-                <strong>{esc(zone['zone_name'])}</strong>
-                {_millions(zone['totals']['total'])} all years
-              </div>
+            <div class="zone-group">
               <div class="year-bars">{"".join(bars)}</div>
+              <div class="zone-caption" title="{esc(zone['zone_name'])}">{esc(zone['zone_name'])}</div>
             </div>
             """
         )
 
-    return f'<div class="chart-wrap"><div class="zone-chart">{"".join(rows)}</div></div>'
+    return f'<div class="chart-wrap"><div class="zone-chart">{"".join(groups)}</div></div>'
 
 
 def _top_list_html(year, projects):
