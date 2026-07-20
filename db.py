@@ -953,13 +953,88 @@ def fetch_architecture_graph():
 
 
 def fetch_architecture_by_capability():
-    """Return architecture components grouped by capability."""
+    """Return architecture components grouped by capability (flat)."""
     components = fetch_all_architecture()
     grouped = {}
     for component in components:
-        grouped.setdefault(component["capability"], []).append(component)
+        grouped.setdefault(component.get("capability") or "Unassigned", []).append(
+            component
+        )
     return grouped
 
+
+def fetch_architecture_model():
+    """
+    Return architecture components nested as:
+    [{zone_name, sub_zones: [{sub_zone_name, capabilities: [{name, components}]}]}]
+    """
+    init_db()
+    with get_connection() as conn:
+        rows = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT
+                    a.*,
+                    c.name AS capability_name,
+                    c.sort_order AS capability_sort,
+                    sz.name AS sub_zone_name,
+                    sz.sort_order AS sub_zone_sort,
+                    z.name AS zone_name,
+                    z.sort_order AS zone_sort
+                FROM architecture_components a
+                JOIN sub_zones sz ON sz.id = a.sub_zone_id
+                JOIN zones z ON z.id = sz.zone_id
+                LEFT JOIN capabilities c ON c.id = a.capability_id
+                ORDER BY z.sort_order, z.name, sz.sort_order, sz.name,
+                         c.sort_order, c.name, a.name, a.id
+                """
+            )
+        ]
+
+    zones = []
+    zone_index = {}
+    for row in rows:
+        component = _enrich_architecture(row, row.get("capability_name"))
+        component["zone_name"] = row["zone_name"]
+        component["sub_zone_name"] = row["sub_zone_name"]
+        component["capability"] = row.get("capability_name") or "Unassigned"
+
+        zone_name = row["zone_name"]
+        if zone_name not in zone_index:
+            zone_index[zone_name] = {
+                "zone_name": zone_name,
+                "sub_zones": [],
+                "_sub_index": {},
+            }
+            zones.append(zone_index[zone_name])
+        zone = zone_index[zone_name]
+
+        sub_name = row["sub_zone_name"]
+        if sub_name not in zone["_sub_index"]:
+            zone["_sub_index"][sub_name] = {
+                "sub_zone_name": sub_name,
+                "capabilities": [],
+                "_cap_index": {},
+            }
+            zone["sub_zones"].append(zone["_sub_index"][sub_name])
+        sub_zone = zone["_sub_index"][sub_name]
+
+        cap_name = component["capability"]
+        if cap_name not in sub_zone["_cap_index"]:
+            sub_zone["_cap_index"][cap_name] = {
+                "name": cap_name,
+                "components": [],
+            }
+            sub_zone["capabilities"].append(sub_zone["_cap_index"][cap_name])
+        sub_zone["_cap_index"][cap_name]["components"].append(component)
+
+    for zone in zones:
+        for sub_zone in zone["sub_zones"]:
+            del sub_zone["_cap_index"]
+        del zone["_sub_index"]
+
+    return zones
 
 def fetch_architecture_roadmap():
     """

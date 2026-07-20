@@ -6,7 +6,7 @@ import json
 
 from flask import Blueprint, jsonify
 
-from db import fetch_architecture_by_capability, fetch_architecture_graph
+from db import fetch_architecture_graph, fetch_architecture_model
 from ui import esc, render_page
 
 architecture_views_bp = Blueprint("architecture_views", __name__)
@@ -30,12 +30,29 @@ DIAGRAM_EXTRA_CSS = """
 """
 
 CAPABILITIES_EXTRA_CSS = """
-.capability { margin-bottom: 1.75rem; }
-.capability h2 {
-  font-size: 1.05rem;
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.35rem;
+.zone-block { margin-bottom: 2.25rem; }
+.zone-heading {
+  font-size: 1.65rem;
+  font-weight: 700;
+  margin: 0 0 0.85rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--accent);
+}
+.subzone-block { margin: 0 0 1.5rem 0.35rem; }
+.subzone-heading {
+  font-size: 1.35rem;
+  font-weight: 650;
+  margin: 0 0 0.7rem;
+  color: var(--text);
+}
+.capability { margin: 0 0 1.25rem 0.35rem; }
+.capability-heading {
+  font-size: 1.1rem;
+  font-weight: 650;
+  margin: 0 0 0.65rem;
+  padding-bottom: 0.3rem;
   border-bottom: 1px solid var(--line);
+  color: var(--muted);
 }
 .grid {
   display: grid;
@@ -94,6 +111,20 @@ def _legend_html():
             f'<span><i class="swatch" style="background:{color}"></i>{_esc(outlook)}</span>'
         )
     return "".join(items)
+
+
+def _component_card(component):
+    color = OUTLOOK_COLORS.get(component["outlook"], "#8fa0b5")
+    return f"""
+    <a class="card" href="/architecture/{_esc(component['id'])}"
+       style="background:{color}33;border-color:{color};border-left:4px solid {color}">
+      <div class="card-title">{_esc(component['title'])}</div>
+      <div class="card-id">{_esc(component['id'])} · {_esc(component['component_type'])}</div>
+      <div class="card-outlook" style="background:{color}">{_esc(component['outlook'])}</div>
+      <div class="card-desc">{_esc(component['description'])}</div>
+      <div class="card-owner">Owner: {_esc(component['owner'])}</div>
+    </a>
+    """
 
 
 @architecture_views_bp.route("/architecture/diagram")
@@ -214,40 +245,46 @@ def architecture_diagram_data():
 
 @architecture_views_bp.route("/architecture/capabilities")
 def architecture_capabilities_page():
-    grouped = fetch_architecture_by_capability()
-    sections = []
-    for capability, components in grouped.items():
-        cards = []
-        for component in components:
-            color = OUTLOOK_COLORS.get(component["outlook"], "#8fa0b5")
-            cards.append(
+    model = fetch_architecture_model()
+    zone_sections = []
+    for zone in model:
+        subzone_sections = []
+        for sub_zone in zone["sub_zones"]:
+            capability_sections = []
+            for capability in sub_zone["capabilities"]:
+                cards = [_component_card(c) for c in capability["components"]]
+                capability_sections.append(
+                    f"""
+                    <section class="capability">
+                      <h4 class="capability-heading">Capability: {_esc(capability['name'])}</h4>
+                      <div class="grid">{"".join(cards)}</div>
+                    </section>
+                    """
+                )
+            subzone_sections.append(
                 f"""
-                <a class="card" href="/architecture/{_esc(component['id'])}"
-                   style="background:{color}33;border-color:{color};border-left:4px solid {color}">
-                  <div class="card-title">{_esc(component['title'])}</div>
-                  <div class="card-id">{_esc(component['id'])} · {_esc(component['component_type'])}</div>
-                  <div class="card-outlook" style="background:{color}">{_esc(component['outlook'])}</div>
-                  <div class="card-desc">{_esc(component['description'])}</div>
-                  <div class="card-owner">Owner: {_esc(component['owner'])}</div>
-                </a>
+                <section class="subzone-block">
+                  <h3 class="subzone-heading">SubZone: {_esc(sub_zone['sub_zone_name'])}</h3>
+                  {"".join(capability_sections)}
+                </section>
                 """
             )
-        sections.append(
+        zone_sections.append(
             f"""
-            <section class="capability">
-              <h2>{_esc(capability)}</h2>
-              <div class="grid">{"".join(cards)}</div>
+            <section class="zone-block">
+              <h2 class="zone-heading">Zone: {_esc(zone['zone_name'])}</h2>
+              {"".join(subzone_sections)}
             </section>
             """
         )
 
     body = f"""
   <div class="legend">{_legend_html()}</div>
-  {"".join(sections) or "<p style='padding:1.5rem;color:var(--muted)'>No architecture components</p>"}
+  {"".join(zone_sections) or "<p style='padding:1.5rem;color:var(--muted)'>No architecture components</p>"}
 """
     return render_page(
         title="Architecture Model",
-        subtitle="Components grouped by capability · colour = arch outlook",
+        subtitle="Components grouped by zone, sub-zone, and capability · colour = arch outlook",
         active="Architecture Model",
         body=body,
         extra_css=CAPABILITIES_EXTRA_CSS,
