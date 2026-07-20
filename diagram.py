@@ -104,8 +104,9 @@ EXTRA_CSS = r"""
 
 .track {
   position: relative;
-  min-height: 150px;
+  min-height: 106px;
   padding-bottom: 0.5rem;
+  transition: min-height 180ms ease;
 }
 
 .project-bar {
@@ -140,19 +141,27 @@ EXTRA_CSS = r"""
 
 .impacts {
   position: absolute;
+  top: 100px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem 0.85rem;
+  flex-direction: column;
   align-items: flex-start;
+  gap: 0.35rem;
   z-index: 3;
+  max-width: min(420px, 45vw);
+}
+
+.impacts:empty,
+.impacts.no-visible {
+  display: none;
 }
 
 .impact {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 0.28rem;
-  width: 108px;
+  gap: 0.45rem;
+  width: auto;
+  max-width: 100%;
   cursor: pointer;
   transition: opacity 180ms ease, filter 180ms ease;
 }
@@ -215,15 +224,23 @@ EXTRA_CSS = r"""
 }
 
 .impact-label {
-  font-size: 0.66rem;
-  line-height: 1.25;
+  font-size: 0.7rem;
+  line-height: 1.2;
   color: var(--text);
-  text-align: center;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .impact-label .iid {
   color: var(--accent);
   font-weight: 650;
+}
+
+.impact-label .rel {
+  color: var(--muted);
 }
 
 .faded {
@@ -450,6 +467,23 @@ DIAGRAM_JS = r"""
       root.querySelectorAll(".impact.architecture").forEach((el) => {
         el.classList.toggle("hidden-layer", !showArch);
       });
+
+      root.querySelectorAll(".track").forEach((track) => {
+        const impacts = track.querySelector(".impacts");
+        if (!impacts) {
+          track.style.minHeight = "106px";
+          return;
+        }
+        const visible = [...impacts.querySelectorAll(".impact")].filter(
+          (el) => !el.classList.contains("hidden-layer")
+        );
+        impacts.classList.toggle("no-visible", visible.length === 0);
+        if (visible.length === 0) {
+          track.style.minHeight = "106px";
+        } else {
+          track.style.minHeight = 100 + visible.length * 28 + 12 + "px";
+        }
+      });
     }
 
     for (const project of data.projects) {
@@ -468,6 +502,7 @@ DIAGRAM_JS = r"""
       const end = parseDate(project.end_date);
       const left = pct(start, rangeStart, rangeEnd);
       const width = Math.max(pct(end, rangeStart, rangeEnd) - left, 8);
+      const endPct = left + width;
 
       const bar = document.createElement("div");
       bar.className = `project-bar ${RAG_CLASS[project.rag_status] || "rag-amber"}`;
@@ -485,12 +520,14 @@ DIAGRAM_JS = r"""
       `;
       track.appendChild(bar);
 
-      const linked = edgesByProject[project.id] || [];
+      const linked = (edgesByProject[project.id] || []).filter(
+        (edge) => edge.linked_type === "risk" || edge.linked_type === "architecture"
+      );
       const impacts = document.createElement("div");
       impacts.className = "impacts";
-      impacts.style.left = left + "%";
-      impacts.style.width = width + "%";
-      impacts.style.top = "100px";
+      // Anchor markers to the project end date.
+      impacts.style.left = endPct + "%";
+      impacts.style.transform = "translateX(-12px)";
 
       linked.forEach((edge) => {
         const isRisk = edge.linked_type === "risk";
@@ -513,8 +550,8 @@ DIAGRAM_JS = r"""
             </div>
           </div>
           <div class="impact-label">
-            <span class="iid">${item.id}</span> ${item.title}<br />
-            <span style="color:var(--muted)">${edge.relationship}</span>
+            <span class="iid">${item.id}</span> ${item.title}
+            <span class="rel"> · ${edge.relationship}</span>
           </div>
         `;
         impact.addEventListener("click", (evt) => {
@@ -525,11 +562,8 @@ DIAGRAM_JS = r"""
       });
 
       track.appendChild(impacts);
-
-      // Let the impacts area determine row height after layout.
-      const impactRows = Math.max(1, Math.ceil(linked.length / 3));
-      const neededHeight = 100 + impactRows * 70 + 12;
-      track.style.minHeight = neededHeight + "px";
+      track.style.minHeight =
+        linked.length === 0 ? "106px" : 100 + linked.length * 28 + 12 + "px";
 
       row.appendChild(label);
       row.appendChild(track);
