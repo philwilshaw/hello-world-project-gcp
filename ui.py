@@ -100,10 +100,13 @@ def render_nav(active: str | None = None) -> str:
             else:
                 menu_parts.append(f'<a href="{esc(href)}">{esc(label)}</a>')
 
-        open_attr = " open" if group_active else ""
-        summary_class = ' class="nav-dropdown-label active"' if group_active else ' class="nav-dropdown-label"'
+        summary_class = (
+            ' class="nav-dropdown-label active"'
+            if group_active
+            else ' class="nav-dropdown-label"'
+        )
         parts.append(
-            f'<details class="nav-dropdown"{open_attr}>'
+            f'<details class="nav-dropdown">'
             f'<summary{summary_class}>{esc(group["label"])}</summary>'
             f'<div class="nav-dropdown-menu">{"".join(menu_parts)}</div>'
             f"</details>"
@@ -156,6 +159,13 @@ NAV_JS = """
       document.querySelectorAll(".nav-dropdown").forEach((other) => {
         if (other !== dropdown) other.open = false;
       });
+    });
+  });
+
+  document.addEventListener("click", (evt) => {
+    if (evt.target.closest(".nav-dropdown")) return;
+    document.querySelectorAll(".nav-dropdown").forEach((dropdown) => {
+      dropdown.open = false;
     });
   });
 </script>
