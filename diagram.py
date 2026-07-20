@@ -104,17 +104,17 @@ EXTRA_CSS = r"""
 
 .track {
   position: relative;
-  min-height: 106px;
+  min-height: 72px;
   padding-bottom: 0.5rem;
   transition: min-height 180ms ease;
 }
 
 .project-bar {
   position: absolute;
-  top: 14px;
-  height: 78px;
+  top: 10px;
+  height: 52px;
   border-radius: 8px;
-  padding: 0.55rem 0.7rem;
+  padding: 0.4rem 0.65rem;
   overflow: hidden;
   color: #fff;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
@@ -123,16 +123,19 @@ EXTRA_CSS = r"""
 }
 
 .project-bar .title {
-  font-size: 0.98rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  line-height: 1.2;
-  margin-bottom: 0.28rem;
+  line-height: 1.15;
+  margin-bottom: 0.18rem;
 }
 
 .project-bar .meta {
-  font-size: 0.68rem;
-  line-height: 1.35;
+  font-size: 0.66rem;
+  line-height: 1.25;
   opacity: 0.92;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .project-bar.rag-green { background: linear-gradient(180deg, #36b078, var(--rag-green)); }
@@ -141,7 +144,7 @@ EXTRA_CSS = r"""
 
 .impacts {
   position: absolute;
-  top: 100px;
+  top: 68px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -471,7 +474,7 @@ DIAGRAM_JS = r"""
       root.querySelectorAll(".track").forEach((track) => {
         const impacts = track.querySelector(".impacts");
         if (!impacts) {
-          track.style.minHeight = "106px";
+          track.style.minHeight = "72px";
           return;
         }
         const visible = [...impacts.querySelectorAll(".impact")].filter(
@@ -479,9 +482,9 @@ DIAGRAM_JS = r"""
         );
         impacts.classList.toggle("no-visible", visible.length === 0);
         if (visible.length === 0) {
-          track.style.minHeight = "106px";
+          track.style.minHeight = "72px";
         } else {
-          track.style.minHeight = 100 + visible.length * 28 + 12 + "px";
+          track.style.minHeight = 68 + visible.length * 28 + 12 + "px";
         }
       });
     }
@@ -512,10 +515,7 @@ DIAGRAM_JS = r"""
       bar.innerHTML = `
         <div class="title">${project.title}</div>
         <div class="meta">
-          ${project.budget_id || project.id}<br />
-          ${project.start_date} → ${project.end_date}<br />
-          Capex ${formatMoney(project.capex_gbp)} · Opex ${formatMoney(project.opex_gbp)}<br />
-          ${project.description}
+          ${project.id} - ${project.start_date} - ${project.end_date}
         </div>
       `;
       track.appendChild(bar);
@@ -563,7 +563,7 @@ DIAGRAM_JS = r"""
 
       track.appendChild(impacts);
       track.style.minHeight =
-        linked.length === 0 ? "106px" : 100 + linked.length * 28 + 12 + "px";
+        linked.length === 0 ? "72px" : 68 + linked.length * 28 + 12 + "px";
 
       row.appendChild(label);
       row.appendChild(track);
