@@ -381,9 +381,9 @@ ROADMAP_JS = r"""
 @architecture_roadmap_bp.route("/architecture/roadmap")
 def architecture_roadmap_page():
     return render_page(
-        title="Architecture Roadmap Timeline",
+        title="Architecture Roadmap",
         subtitle="Grouped by capability · lifespan bars by year · stars mark project go-lives",
-        active="Arch roadmap",
+        active="Architecture Roadmap",
         body=ROADMAP_BODY,
         extra_css=EXTRA_CSS,
         extra_js=ROADMAP_JS,

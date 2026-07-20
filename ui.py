@@ -12,13 +12,13 @@ from flask import render_template_string
 NAV_ITEMS = [
     ("/", "Home"),
     ("/zones", "Zones"),
-    ("/diagram", "Timeline"),
-    ("/projects", "Projects"),
-    ("/risks", "Risks"),
-    ("/architecture", "Architecture"),
-    ("/architecture/diagram", "Arch diagram"),
-    ("/architecture/capabilities", "By capability"),
-    ("/architecture/roadmap", "Arch roadmap"),
+    ("/diagram", "Project Roadmap"),
+    ("/projects", "Project List"),
+    ("/risks", "Risk List"),
+    ("/architecture", "Architecture List"),
+    ("/architecture/diagram", "Architecture Diagram"),
+    ("/architecture/capabilities", "Architecture Model"),
+    ("/architecture/roadmap", "Architecture Roadmap"),
 ]
 
 
@@ -38,12 +38,19 @@ def render_nav(active: str | None = None) -> str:
 
 def render_header(title: str, subtitle: str = "", active: str | None = None) -> str:
     subtitle_html = (
-        f'<p class="subtitle">{esc(subtitle)}</p>' if subtitle else ""
+        f'<h2 class="subtitle">{esc(subtitle)}</h2>' if subtitle else ""
     )
     return f"""
 <header class="site-header">
-  <h1>{esc(title)}</h1>
-  {subtitle_html}
+  <div class="header-top">
+    <div class="header-titles">
+      <h1>{esc(title)}</h1>
+      {subtitle_html}
+    </div>
+    <a class="header-logo" href="/" title="PhilTech">
+      <img src="/static/philtech-logo.svg" alt="PhilTech" width="160" height="48" />
+    </a>
+  </div>
   <nav class="site-nav">
     {render_nav(active)}
   </nav>

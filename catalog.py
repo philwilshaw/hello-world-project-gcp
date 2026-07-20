@@ -150,26 +150,6 @@ def _relationship_options(values):
     )
 
 
-def _db_banner(status=None):
-    status = status or get_db_status()
-    if status["writes_enabled"]:
-        return (
-            "<div class='db-banner open'>"
-            f"<strong>Environment:</strong> {_esc(status['environment'])} · "
-            "<strong>Database changes:</strong> allowed · "
-            "This database is backed up hourly and reset to the last safe copy at midnight."
-            "</div>"
-        )
-    return (
-        "<div class='db-banner locked'>"
-        f"<strong>Environment:</strong> {_esc(status['environment'])} · "
-        "<strong>Database changes:</strong> locked · "
-        "Add/remove link controls are disabled. "
-        "The database is still reset to the last safe copy at midnight."
-        "</div>"
-    )
-
-
 def _remove_button(edge_id, label, writes_enabled=True):
     disabled = "" if writes_enabled else " disabled"
     return (
@@ -192,7 +172,6 @@ def _linked_item(href, text, meta, edge_id, label, writes_enabled=True):
 
 def _list_page(*, title, subtitle, active, table_head, table_body):
     body = f"""
-    {_db_banner()}
     <div class="table-wrap">
       <table>
         <thead><tr>{table_head}</tr></thead>
@@ -213,14 +192,12 @@ def _detail_page(
     title,
     subtitle,
     active,
-    db_banner,
     back_href,
     back_label,
     fields,
     linked,
 ):
     body = f"""
-    {db_banner}
     <p style="margin-bottom:1rem"><a href="{_esc(back_href)}">{_esc(back_label)}</a></p>
     <section class="detail-card">
       <h2>{_esc(title)}</h2>
@@ -287,9 +264,9 @@ def projects_list():
             """
         )
     return _list_page(
-        title="Projects",
+        title="Project List",
         subtitle="All projects from the projects table",
-        active="Projects",
+        active="Project List",
         table_head="""
           <th>ID</th><th>Title</th><th>Description</th>
           <th>Budget status</th><th>Start</th><th>End</th>
@@ -319,9 +296,9 @@ def risks_list():
             """
         )
     return _list_page(
-        title="Risks",
+        title="Risk List",
         subtitle="All corporate risks from the risks table",
-        active="Risks",
+        active="Risk List",
         table_head="""
           <th>ID</th><th>Title</th><th>Description</th>
           <th>Impact band</th><th>Proximity</th><th>Score</th><th>Status</th>
@@ -351,9 +328,9 @@ def architecture_list():
             """
         )
     return _list_page(
-        title="Architecture",
+        title="Architecture List",
         subtitle="All architecture components from the architecture_components table",
-        active="Architecture",
+        active="Architecture List",
         table_head="""
           <th>ID</th><th>Name</th><th>Description</th>
           <th>Host type</th><th>Architect</th><th>Capability</th><th>Outlook</th><th>State</th>
@@ -449,10 +426,9 @@ def project_detail(project_id):
     return _detail_page(
         title=p["title"],
         subtitle=f"Project detail · {p['id']}",
-        active="Projects",
-        db_banner=_db_banner(status),
+        active="Project List",
         back_href="/projects",
-        back_label="← All projects",
+        back_label="← Project List",
         fields=fields,
         linked=linked,
     )
@@ -519,10 +495,9 @@ def risk_detail(risk_id):
     return _detail_page(
         title=r["title"],
         subtitle=f"Risk detail · {r['id']}",
-        active="Risks",
-        db_banner=_db_banner(status),
+        active="Risk List",
         back_href="/risks",
-        back_label="← All risks",
+        back_label="← Risk List",
         fields=fields,
         linked=linked,
     )
@@ -592,10 +567,9 @@ def architecture_detail(architecture_id):
     return _detail_page(
         title=a["title"],
         subtitle=f"Architecture detail · {a['id']}",
-        active="Architecture",
-        db_banner=_db_banner(status),
+        active="Architecture List",
         back_href="/architecture",
-        back_label="← All architecture",
+        back_label="← Architecture List",
         fields=fields,
         linked=linked,
     )

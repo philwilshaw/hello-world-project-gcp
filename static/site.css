@@ -67,20 +67,71 @@ a:hover {
   border-bottom: 1px solid var(--line);
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  gap: 0.55rem;
+}
+
+.header-top {
+  display: flex;
   align-items: flex-start;
-  gap: 0.35rem;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.header-titles {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
 }
 
 .site-header h1 {
-  font-size: 1.15rem;
-  font-weight: 650;
+  font-size: 1.85rem;
+  font-weight: 700;
+  line-height: 1.2;
   margin: 0;
 }
 
+.site-header h2.subtitle,
 .site-header .subtitle {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 1.2rem;
+  font-weight: 550;
+  line-height: 1.35;
   margin: 0;
+}
+
+.header-logo {
+  flex: 0 0 auto;
+  display: block;
+  line-height: 0;
+  text-decoration: none;
+}
+
+.header-logo img {
+  display: block;
+  height: 48px;
+  width: auto;
+}
+
+.header-logo:hover {
+  text-decoration: none;
+  opacity: 0.9;
+}
+
+@media (max-width: 640px) {
+  .site-header h1 {
+    font-size: 1.45rem;
+  }
+
+  .site-header h2.subtitle,
+  .site-header .subtitle {
+    font-size: 1.05rem;
+  }
+
+  .header-logo img {
+    height: 40px;
+  }
 }
 
 .site-nav {
@@ -311,8 +362,12 @@ tr:last-child td {
 }
 
 .detail-card h2 {
-  font-size: 1.35rem;
+  font-size: 1.65rem;
   margin-bottom: 0.85rem;
+}
+
+h2 {
+  font-size: 1.5rem;
 }
 
 .fields {
@@ -485,7 +540,7 @@ button.remove-link:disabled {
 
 .prose h2 {
   margin: 1.5rem 0 0.75rem;
-  font-size: 1.15rem;
+  font-size: 1.5rem;
 }
 
 .prose h3 {
@@ -549,7 +604,7 @@ button.remove-link:disabled {
 }
 
 .sitemap-heading {
-  font-size: 1rem;
+  font-size: 1.5rem;
   margin-bottom: 0.35rem;
 }
 

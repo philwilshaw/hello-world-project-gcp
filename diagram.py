@@ -558,9 +558,9 @@ DIAGRAM_JS = r"""
 @diagram_bp.route("/diagram")
 def diagram_page():
     return render_page(
-        title="Project Impact Timeline",
+        title="Project Roadmap",
         subtitle="Projects address corporate risks and change architecture components",
-        active="Timeline",
+        active="Project Roadmap",
         body=DIAGRAM_BODY,
         extra_css=EXTRA_CSS,
         extra_js=DIAGRAM_JS,

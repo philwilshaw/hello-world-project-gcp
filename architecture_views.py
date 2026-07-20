@@ -172,9 +172,9 @@ def architecture_diagram_page():
 </script>
 """
     return render_page(
-        title="Architecture diagram",
+        title="Architecture Diagram",
         subtitle="Architecture components and relationships · colour = outlook",
-        active="Arch diagram",
+        active="Architecture Diagram",
         body=body,
         extra_css=DIAGRAM_EXTRA_CSS,
         extra_js=extra_js,
@@ -246,9 +246,9 @@ def architecture_capabilities_page():
   {"".join(sections) or "<p style='padding:1.5rem;color:var(--muted)'>No architecture components</p>"}
 """
     return render_page(
-        title="Architecture by capability",
+        title="Architecture Model",
         subtitle="Components grouped by capability · colour = arch outlook",
-        active="By capability",
+        active="Architecture Model",
         body=body,
         extra_css=CAPABILITIES_EXTRA_CSS,
     )
