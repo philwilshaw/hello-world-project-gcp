@@ -387,6 +387,11 @@ def generate_run_contracts(budgets, zone_maps, count=50):
         po_renewal = start + timedelta(days=365)
         _, _, sub_zone_id, _ = _pick_zone_subzone(zone_maps)
         status = random.choice(CONTRACT_STATUSES)
+        next_action = (
+            "Terminate"
+            if status == "Archive"
+            else random.choice(NEXT_RENEWAL_ACTIONS)
+        )
         rows.append(
             {
                 "fin_id": f"Finance-{i:04d}",
@@ -405,7 +410,7 @@ def generate_run_contracts(budgets, zone_maps, count=50):
                 "contract_start_date": start.isoformat(),
                 "contract_end_date": end.isoformat(),
                 "po_renewal_date": po_renewal.isoformat(),
-                "next_renewal_action": random.choice(NEXT_RENEWAL_ACTIONS),
+                "next_renewal_action": next_action,
                 "contract_status": status,
                 "vendor_manager": random.choice(FOOTBALL_PLAYERS),
                 "operational_owner": random.choice(TENNIS_PLAYERS),

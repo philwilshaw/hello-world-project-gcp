@@ -14,7 +14,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "local").strip() or "local"
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 # Prefer explicit bucket; otherwise derive a per-environment default name when
 # running in GCP-style envs. Local keeps files on disk only unless overridden.
@@ -1167,6 +1167,9 @@ def fetch_run_contract_roadmap():
             row["contract_start_date"], row["contract_end_date"]
         )
         item["extension_years"] = _renewal_extension_years(row["next_renewal_action"])
+        if row["contract_status"] == "Archive":
+            item["next_renewal_action"] = "Terminate"
+            item["extension_years"] = 0
         contracts.append(item)
     return {"contracts": contracts}
 

@@ -226,9 +226,34 @@ EXTRA_CSS = r"""
   color: var(--text);
   border: 1px solid rgba(143, 160, 181, 0.55);
 }
+
+.roadmap-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.25rem;
+  margin: 0 0 0.85rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.roadmap-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.roadmap-controls input[type="checkbox"] {
+  accent-color: var(--accent);
+}
 """
 
 ROADMAP_BODY = """
+  <div class="roadmap-controls">
+    <label><input type="checkbox" id="hide-archived" /> Hide archived contracts</label>
+  </div>
+
   <div class="legend">
     <span><i class="swatch" style="background:#5b8def"></i>Current contract</span>
     <span><i class="swatch" style="background:#8fa0b5"></i>Archive</span>
@@ -295,15 +320,31 @@ ROADMAP_JS = r"""
     return ((value - start) / (end - start)) * 100;
   }
 
+  let allContracts = [];
+
   fetch("/run-contracts/roadmap/data")
     .then((r) => r.json())
-    .then((payload) => renderRoadmap(payload.contracts || []));
+    .then((payload) => {
+      allContracts = payload.contracts || [];
+      renderRoadmap();
+    });
 
-  function renderRoadmap(contracts) {
+  document.getElementById("hide-archived").addEventListener("change", renderRoadmap);
+
+  function renderRoadmap() {
     const root = document.getElementById("timeline");
+    root.innerHTML = "";
+
+    const hideArchived = document.getElementById("hide-archived").checked;
+    const contracts = hideArchived
+      ? allContracts.filter((c) => c.contract_status !== "Archive")
+      : allContracts;
+
     const dated = contracts.filter((c) => c.contract_start_date && c.contract_end_date);
     if (!dated.length) {
-      root.textContent = "No run contract dates available.";
+      root.textContent = hideArchived
+        ? "No current contracts to display."
+        : "No run contract dates available.";
       return;
     }
 
@@ -375,6 +416,8 @@ ROADMAP_JS = r"""
       zoneGroup.appendChild(zoneTitle);
 
       for (const [subName, items] of Object.entries(subZones)) {
+        if (!items.length) continue;
+
         const row = document.createElement("div");
         row.className = "row";
 
@@ -471,7 +514,9 @@ ROADMAP_JS = r"""
         zoneGroup.appendChild(row);
       }
 
-      rows.appendChild(zoneGroup);
+      if (zoneGroup.querySelectorAll(".row").length) {
+        rows.appendChild(zoneGroup);
+      }
     }
   }
 </script>
