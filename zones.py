@@ -242,17 +242,21 @@ EXTRA_CSS = """
   font-weight: 650;
 }
 
-.zone-card-footer .stakeholders-label {
+.zone-card-footer .people-label {
   margin-top: 0.5rem;
 }
 
-.zone-card-footer .stakeholder-list {
+.zone-card-footer .people-label:first-child {
+  margin-top: 0;
+}
+
+.zone-card-footer .people-list {
   margin: 0.35rem 0 0 1.1rem;
   padding: 0;
   color: var(--muted);
 }
 
-.zone-card-footer .stakeholder-list li {
+.zone-card-footer .people-list li {
   margin-bottom: 0.2rem;
 }
 """
@@ -295,6 +299,7 @@ def _zone_card(zone: dict) -> str:
     people = _ZONE_PEOPLE.get(zone["id"], {})
     architect = people.get("enterprise_architect", "TBD")
     stakeholders = people.get("stakeholders", [])
+    architect_item = f"<li>{esc(architect)}</li>"
     stakeholder_items = "".join(
         f"<li>{esc(name)} ({esc(title)})</li>"
         for name, title in stakeholders
@@ -340,9 +345,10 @@ def _zone_card(zone: dict) -> str:
         {"".join(sub_blocks)}
       </div>
       <div class="zone-card-footer">
-        <div><strong>Enterprise Architect:</strong> {esc(architect)}</div>
-        <div class="stakeholders-label"><strong>Stakeholders:</strong></div>
-        <ul class="stakeholder-list">{stakeholder_items}</ul>
+        <div class="people-label"><strong>Enterprise Architect:</strong></div>
+        <ul class="people-list">{architect_item}</ul>
+        <div class="people-label"><strong>Stakeholders:</strong></div>
+        <ul class="people-list">{stakeholder_items}</ul>
       </div>
     </article>
     """

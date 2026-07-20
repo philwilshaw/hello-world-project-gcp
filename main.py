@@ -311,6 +311,11 @@ def about_page():
       Restore database to last safe copy
     </button>
   </p>
+  <p style="margin:0.35rem 0 0">
+    <button id="export-csv-btn" class="export-csv-btn" type="button">
+      Download database to CSV
+    </button>
+  </p>
 </div>
 
 <h2>What I accomplished</h2>
@@ -530,11 +535,229 @@ I started with no experience and now I can:
 </div>
 """
 
+    about_css = """
+.export-csv-btn {
+  background: var(--link);
+  color: #0d1524;
+}
+.export-csv-btn:disabled {
+  background: #5a6a82;
+  color: #c5cdd8;
+  cursor: wait;
+}
+.download-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 12, 20, 0.72);
+  backdrop-filter: blur(2px);
+}
+.download-overlay.visible {
+  display: flex;
+}
+.download-overlay-card {
+  max-width: 26rem;
+  margin: 1rem;
+  padding: 1.35rem 1.5rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #152033;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+.download-overlay-card h3 {
+  margin: 0 0 0.55rem;
+  font-size: 1.1rem;
+  color: var(--text);
+}
+.download-overlay-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.download-overlay-card .spinner {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0 auto 0.85rem;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: download-spin 0.8s linear infinite;
+}
+@keyframes download-spin {
+  to { transform: rotate(360deg); }
+}
+.download-overlay-card.error h3 {
+  color: #ffb4b4;
+}
+.download-overlay-card .overlay-actions {
+  margin-top: 1rem;
+}
+"""
+
+    about_js = """
+<script>
+(function () {
+  const btn = document.getElementById("export-csv-btn");
+  if (!btn) return;
+
+  const overlay = document.createElement("div");
+  overlay.className = "download-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-live", "polite");
+  overlay.innerHTML = `
+    <div class="download-overlay-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <h3>Preparing download</h3>
+      <p>Do not close this window until the download has completed.</p>
+      <div class="overlay-actions" hidden>
+        <button type="button" class="overlay-dismiss">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const card = overlay.querySelector(".download-overlay-card");
+  const title = card.querySelector("h3");
+  const message = card.querySelector("p");
+  const spinner = card.querySelector(".spinner");
+  const actions = card.querySelector(".overlay-actions");
+  const dismiss = card.querySelector(".overlay-dismiss");
+
+  let downloading = false;
+  let objectUrl = null;
+
+  function warnIfLeaving(event) {
+    if (!downloading) return;
+    event.preventDefault();
+    event.returnValue = "";
+  }
+
+  function showBusy() {
+    downloading = true;
+    window.addEventListener("beforeunload", warnIfLeaving);
+    btn.disabled = true;
+    card.classList.remove("error");
+    spinner.hidden = false;
+    actions.hidden = true;
+    title.textContent = "Preparing download";
+    message.textContent =
+      "Do not close this window until the download has completed.";
+    overlay.classList.add("visible");
+  }
+
+  function showError(text) {
+    downloading = false;
+    window.removeEventListener("beforeunload", warnIfLeaving);
+    btn.disabled = false;
+    spinner.hidden = true;
+    actions.hidden = false;
+    card.classList.add("error");
+    title.textContent = "Download failed";
+    message.textContent = text || "Something went wrong while exporting the database.";
+  }
+
+  function hideOverlay() {
+    downloading = false;
+    window.removeEventListener("beforeunload", warnIfLeaving);
+    btn.disabled = false;
+    overlay.classList.remove("visible");
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+      objectUrl = null;
+    }
+  }
+
+  dismiss.addEventListener("click", hideOverlay);
+
+  function filenameFromDisposition(header) {
+    if (!header) return null;
+    const utfMatch = /filename\\*=UTF-8''([^;]+)/i.exec(header);
+    if (utfMatch) {
+      try {
+        return decodeURIComponent(utfMatch[1].trim());
+      } catch (err) {
+        return utfMatch[1].trim();
+      }
+    }
+    const plainMatch = /filename=\"?([^\";]+)\"?/i.exec(header);
+    return plainMatch ? plainMatch[1].trim() : null;
+  }
+
+  btn.addEventListener("click", async function () {
+    if (downloading) return;
+    showBusy();
+    try {
+      const response = await fetch("/api/db/export-csv", {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        let detail = "Export failed (HTTP " + response.status + ").";
+        try {
+          const data = await response.json();
+          if (data && data.error) detail = data.error;
+        } catch (err) {
+          /* ignore non-JSON error bodies */
+        }
+        showError(detail);
+        return;
+      }
+
+      const blob = await response.blob();
+      if (!blob || blob.size === 0) {
+        showError("The export file was empty. Please try again.");
+        return;
+      }
+
+      const fallbackName =
+        "database-export-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".zip";
+      const filename =
+        filenameFromDisposition(response.headers.get("Content-Disposition")) ||
+        fallbackName;
+
+      objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      title.textContent = "Download started";
+      message.textContent =
+        "Your ZIP of CSV files should appear in your downloads folder shortly.";
+      spinner.hidden = true;
+      actions.hidden = false;
+      downloading = false;
+      window.removeEventListener("beforeunload", warnIfLeaving);
+      btn.disabled = false;
+      window.setTimeout(hideOverlay, 1800);
+    } catch (err) {
+      showError(
+        (err && err.message) ||
+          "Network error while preparing the export. Please try again."
+      );
+    }
+  });
+})();
+</script>
+"""
+
     return render_page(
         title="About this site",
         subtitle="Build story, database status, and what comes next",
         active="About this site",
         body=body,
+        extra_css=about_css,
+        extra_js=about_js,
     )
 
 

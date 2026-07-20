@@ -6,10 +6,13 @@ DATABASE_BUCKET is set, the live DB plus control files are synced to that
 environment's GCS bucket.
 """
 
+import csv
+import io
 import os
 import shutil
 import sqlite3
 import uuid
+import zipfile
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -249,6 +252,57 @@ def get_db_status():
         "has_last_safe": has_last_safe(),
         "database_bucket": DATABASE_BUCKET or None,
     }
+
+
+def export_database_csv_zip():
+    """
+    Build a ZIP of one CSV file per SQLite table.
+
+    Returns (ok, message, filename, payload_bytes).
+    """
+    init_db()
+    if not DB_PATH.exists():
+        return False, "live database missing", None, None
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    filename = f"database-export-{ENVIRONMENT}-{stamp}.zip"
+    buffer = io.BytesIO()
+
+    try:
+        with get_connection() as conn:
+            tables = [
+                row[0]
+                for row in conn.execute(
+                    """
+                    SELECT name FROM sqlite_master
+                    WHERE type = 'table'
+                      AND name NOT LIKE 'sqlite_%'
+                    ORDER BY name
+                    """
+                )
+            ]
+            if not tables:
+                return False, "no tables found to export", None, None
+
+            with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                for table in tables:
+                    columns = [
+                        row[1]
+                        for row in conn.execute(f'PRAGMA table_info("{table}")')
+                    ]
+                    rows = conn.execute(f'SELECT * FROM "{table}"').fetchall()
+                    csv_buffer = io.StringIO()
+                    writer = csv.writer(csv_buffer, lineterminator="\n")
+                    writer.writerow(columns)
+                    for row in rows:
+                        writer.writerow(
+                            ["" if value is None else value for value in row]
+                        )
+                    zf.writestr(f"{table}.csv", csv_buffer.getvalue())
+    except Exception as exc:
+        return False, f"export failed: {exc}", None, None
+
+    return True, "export ready", filename, buffer.getvalue()
 
 
 def init_db():
