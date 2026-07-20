@@ -40,11 +40,13 @@ def render_header(title: str, subtitle: str = "", active: str | None = None) -> 
     )
     return f"""
 <header class="site-header">
-  <h1>{esc(title)}</h1>
+  <div class="site-header-top">
+    <h1>{esc(title)}</h1>
+    <nav class="site-nav">
+      {render_nav(active)}
+    </nav>
+  </div>
   {subtitle_html}
-  <nav class="site-nav">
-    {render_nav(active)}
-  </nav>
 </header>
 """
 

@@ -54,6 +54,12 @@ a:hover {
   padding: 1rem 1.5rem;
   border-bottom: 1px solid var(--line);
   display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.site-header-top {
+  display: flex;
   align-items: baseline;
   gap: 1rem;
   flex-wrap: wrap;
@@ -67,6 +73,8 @@ a:hover {
 .site-header .subtitle {
   color: var(--muted);
   font-size: 0.85rem;
+  width: 100%;
+  margin: 0;
 }
 
 .site-nav {

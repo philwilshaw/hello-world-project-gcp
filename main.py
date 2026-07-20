@@ -45,6 +45,9 @@ def hello():
     <span>Bucket: <strong>{esc(bucket)}</strong></span>
   </div>
   <p class="note">
+    Link add/remove controls are disabled when changes are locked.
+  </p>
+  <p class="note">
     This environment has its own database, with restore-to-last-safe available from
     this page. Hourly backup and midnight reset jobs are built into the app, but the
     Cloud Scheduler setup is still outstanding. Demo edits should be treated as
@@ -57,20 +60,6 @@ def hello():
   </p>
   <div id="restore-status"></div>
 </div>
-
-<div class="page-links">
-  <a href="/diagram">Timeline demo</a>
-  <a href="/projects">Projects</a>
-  <a href="/risks">Risks</a>
-  <a href="/architecture">Architecture</a>
-  <a href="/architecture/diagram">Arch diagram</a>
-  <a href="/architecture/capabilities">By capability</a>
-  <a href="/architecture/roadmap">Arch roadmap</a>
-</div>
-<p class="note">
-  Pages above read from the <strong>{env}</strong> database.
-  Link add/remove controls are disabled when changes are locked.
-</p>
 
 <h2>What I accomplished</h2>
 
@@ -269,7 +258,7 @@ I started with no experience and now I can:
 
     return render_page(
         title="My First Cloud Deployment Project",
-        subtitle=f"Environment: {ENVIRONMENT}",
+        subtitle="Welcome to the demo site",
         active="Home",
         body=body,
         extra_js=restore_js,
