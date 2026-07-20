@@ -8,6 +8,7 @@ from architecture_views import architecture_views_bp
 from catalog import catalog_bp
 from db import get_db_status, init_db
 from diagram import diagram_bp
+from ui import esc, render_page
 
 app = Flask(__name__)
 app.register_blueprint(diagram_bp)
@@ -23,85 +24,25 @@ ENVIRONMENT = os.environ.get("ENVIRONMENT", "local")
 @app.route("/")
 def hello():
     status = get_db_status()
+    writes_enabled = status["writes_enabled"]
     writes_label = (
-        "Changes allowed"
-        if status["writes_enabled"]
-        else "Changes locked (read-only links)"
+        "Changes allowed" if writes_enabled else "Changes locked (read-only links)"
     )
-    writes_color = "#2f9e6b" if status["writes_enabled"] else "#c94c3f"
+    pill_class = "open" if writes_enabled else "locked"
     safe_label = "available" if status["has_last_safe"] else "not set yet"
+    bucket = status["database_bucket"] or "local file only"
+    env = esc(ENVIRONMENT)
+    disabled_attr = "" if status["has_last_safe"] else " disabled"
 
-    return f"""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hello World Project</title>
-  <style>
-    body {{
-      font-family: "Segoe UI", "Helvetica Neue", sans-serif;
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 1.25rem;
-      line-height: 1.45;
-      color: #1b2430;
-      background: #f5f7fa;
-    }}
-    .panel {{
-      background: #fff;
-      border: 1px solid #d5dbe3;
-      border-radius: 10px;
-      padding: 0.9rem 1rem;
-      margin: 0.85rem 0 1.25rem;
-    }}
-    .status {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem 1.25rem;
-      align-items: center;
-      font-size: 0.95rem;
-    }}
-    .pill {{
-      display: inline-block;
-      padding: 0.2rem 0.55rem;
-      border-radius: 999px;
-      color: #fff;
-      font-weight: 650;
-      font-size: 0.85rem;
-      background: {writes_color};
-    }}
-    .note {{
-      color: #5b6775;
-      font-size: 0.9rem;
-      margin-top: 0.55rem;
-    }}
-    button {{
-      background: #1f6feb;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      padding: 0.55rem 0.85rem;
-      font-weight: 650;
-      cursor: pointer;
-    }}
-    button:disabled {{
-      background: #a8b3c2;
-      cursor: not-allowed;
-    }}
-    #restore-status {{ margin-top: 0.5rem; font-size: 0.88rem; color: #5b6775; }}
-    a {{ color: #1558c0; }}
-  </style>
-</head>
-<body>
-<h1>🚀 My First Cloud Deployment Project</h1>
-<p><strong>Environment:</strong> {ENVIRONMENT}</p>
+    body = f"""
+<div class="prose">
+<p><strong>Environment:</strong> {env}</p>
 
 <div class="panel">
-  <div class="status">
-    <span>Database writes: <span class="pill">{writes_label}</span></span>
-    <span>Last safe copy: <strong>{safe_label}</strong></span>
-    <span>Bucket: <strong>{status["database_bucket"] or "local file only"}</strong></span>
+  <div class="status-row">
+    <span>Database writes: <span class="pill {pill_class}">{esc(writes_label)}</span></span>
+    <span>Last safe copy: <strong>{esc(safe_label)}</strong></span>
+    <span>Bucket: <strong>{esc(bucket)}</strong></span>
   </div>
   <p class="note">
     This environment has its own database, with restore-to-last-safe available from
@@ -110,28 +51,28 @@ def hello():
     temporary unless a new last-safe snapshot is created from Cursor.
   </p>
   <p style="margin:0.85rem 0 0.35rem">
-    <button id="restore-btn" type="button" {"disabled" if not status["has_last_safe"] else ""}>
+    <button id="restore-btn" type="button"{disabled_attr}>
       Restore database to last safe copy
     </button>
   </p>
   <div id="restore-status"></div>
 </div>
 
-<p>
-  <a href="/diagram">Timeline demo</a> ·
-  <a href="/projects">Projects</a> ·
-  <a href="/risks">Risks</a> ·
-  <a href="/architecture">Architecture</a> ·
-  <a href="/architecture/diagram">Arch diagram</a> ·
-  <a href="/architecture/capabilities">By capability</a> ·
+<div class="page-links">
+  <a href="/diagram">Timeline demo</a>
+  <a href="/projects">Projects</a>
+  <a href="/risks">Risks</a>
+  <a href="/architecture">Architecture</a>
+  <a href="/architecture/diagram">Arch diagram</a>
+  <a href="/architecture/capabilities">By capability</a>
   <a href="/architecture/roadmap">Arch roadmap</a>
-</p>
+</div>
 <p class="note">
-  Pages above read from the <strong>{ENVIRONMENT}</strong> database.
+  Pages above read from the <strong>{env}</strong> database.
   Link add/remove controls are disabled when changes are locked.
 </p>
 
-<h2>✅ What I accomplished</h2>
+<h2>What I accomplished</h2>
 
 <h3>1. Built my first Python web app</h3>
 <ul>
@@ -205,13 +146,13 @@ def hello():
 
 <hr>
 
-<h2>🧠 What I built (big picture)</h2>
+<h2>What I built (big picture)</h2>
 <p>
 A working cloud system combining:
 </p>
 <ul>
 <li>Python (Flask backend)</li>
-<li>Git & GitHub (version control)</li>
+<li>Git &amp; GitHub (version control)</li>
 <li>Google Cloud Platform</li>
 <li>Serverless deployment (Cloud Run)</li>
 <li>Automated builds triggered by code changes</li>
@@ -223,7 +164,7 @@ A working cloud system combining:
 
 <hr>
 
-<h2>🧱 Challenges I solved</h2>
+<h2>Challenges I solved</h2>
 
 <ul>
 <li>Understanding Cursor UI and file creation</li>
@@ -245,7 +186,7 @@ A working cloud system combining:
 
 <hr>
 
-<h2>🧠 What I learned</h2>
+<h2>What I learned</h2>
 
 <ul>
 <li>How backend web apps work</li>
@@ -263,7 +204,7 @@ A working cloud system combining:
 
 <hr>
 
-<h2>🎯 Where I am now</h2>
+<h2>Where I am now</h2>
 
 <p>
 I started with no experience and now I can:
@@ -284,7 +225,7 @@ I started with no experience and now I can:
 
 <hr>
 
-<h2>🚧 Still to do</h2>
+<h2>Still to do</h2>
 <ul>
 <li><strong>Vanity URL</strong> — map a clean custom domain to the Cloud Run service</li>
 <li><strong>Database backup scheduled jobs</strong> — finish Cloud Scheduler setup for hourly backups and midnight reset-to-last-safe (prompt saved in <code>scripts/tomorrow-scheduler-setup-prompt.txt</code>)</li>
@@ -292,7 +233,10 @@ I started with no experience and now I can:
 <li><strong>Mark and manage last-safe snapshots from Cursor</strong> — use the admin commands day to day once the token/jobs setup is complete</li>
 <li><strong>Excel-driven schema and sample data</strong> — use a 3-tab Excel workbook as the source for project, risk, and architecture column headings and sample rows; ignore marked columns; honour allowed-value notes above the table; regenerate edges; and provide a downloadable sample workbook to share</li>
 </ul>
+</div>
+"""
 
+    restore_js = f"""
 <script>
   const restoreBtn = document.getElementById("restore-btn");
   const restoreStatus = document.getElementById("restore-status");
@@ -321,9 +265,15 @@ I started with no experience and now I can:
     }});
   }}
 </script>
-</body>
-</html>
 """
+
+    return render_page(
+        title="My First Cloud Deployment Project",
+        subtitle=f"Environment: {ENVIRONMENT}",
+        active="Home",
+        body=body,
+        extra_js=restore_js,
+    )
 
 
 if __name__ == "__main__":
