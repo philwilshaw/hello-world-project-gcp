@@ -13,6 +13,7 @@ NAV_ITEMS = [
     ("/", "Home"),
     ("/zones", "Zones"),
     ("/diagram", "Project Roadmap"),
+    ("/cost-dashboard", "Cost Dashboard"),
     ("/projects", "Project List"),
     ("/risks", "Risk List"),
     ("/architecture", "Architecture List"),

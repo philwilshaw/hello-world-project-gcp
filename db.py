@@ -1108,6 +1108,136 @@ def fetch_all_run_contracts():
         return rows
 
 
+COST_YEARS = (2026, 2027, 2028, 2029)
+
+
+def fetch_cost_dashboard():
+    """
+    Aggregate budget cost by zone and year, plus top projects for 2026/2027.
+
+    Returns:
+      {
+        years: [2026, ...],
+        zones: [{zone_name, years: {2026: {capex, opex, total}, ...}, totals: {...}}],
+        grand_total: {years: {...}, overall: {capex, opex, total}},
+        top_projects: {2026: [...], 2027: [...]},
+      }
+    """
+    init_db()
+    with get_connection() as conn:
+        zone_rows = [
+            dict(row)
+            for row in conn.execute(
+                "SELECT id, name, sort_order FROM zones ORDER BY sort_order, name"
+            )
+        ]
+        budget_rows = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT
+                    b.*,
+                    z.id AS zone_id,
+                    z.name AS zone_name,
+                    z.sort_order AS zone_sort
+                FROM budgets b
+                JOIN sub_zones sz ON sz.id = b.sub_zone_id
+                JOIN zones z ON z.id = sz.zone_id
+                """
+            )
+        ]
+        project_rows = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT
+                    p.line_id,
+                    p.title,
+                    b.capex_2026, b.opex_2026,
+                    b.capex_2027, b.opex_2027,
+                    b.capex_2028, b.opex_2028,
+                    b.capex_2029, b.opex_2029
+                FROM projects p
+                JOIN budgets b ON b.budget_id = p.budget_id
+                """
+            )
+        ]
+
+    by_zone = {}
+    for zone in zone_rows:
+        by_zone[zone["id"]] = {
+            "zone_id": zone["id"],
+            "zone_name": zone["name"],
+            "sort_order": zone["sort_order"],
+            "years": {
+                year: {"capex": 0.0, "opex": 0.0, "total": 0.0}
+                for year in COST_YEARS
+            },
+        }
+
+    for budget in budget_rows:
+        zone = by_zone.get(budget["zone_id"])
+        if zone is None:
+            continue
+        for year in COST_YEARS:
+            capex = float(budget.get(f"capex_{year}") or 0)
+            opex = float(budget.get(f"opex_{year}") or 0)
+            zone["years"][year]["capex"] += capex
+            zone["years"][year]["opex"] += opex
+            zone["years"][year]["total"] += capex + opex
+
+    zones = []
+    grand = {
+        "years": {
+            year: {"capex": 0.0, "opex": 0.0, "total": 0.0} for year in COST_YEARS
+        },
+        "overall": {"capex": 0.0, "opex": 0.0, "total": 0.0},
+    }
+    for zone in sorted(by_zone.values(), key=lambda z: (z["sort_order"], z["zone_name"])):
+        zone_totals = {"capex": 0.0, "opex": 0.0, "total": 0.0}
+        for year in COST_YEARS:
+            y = zone["years"][year]
+            zone_totals["capex"] += y["capex"]
+            zone_totals["opex"] += y["opex"]
+            zone_totals["total"] += y["total"]
+            grand["years"][year]["capex"] += y["capex"]
+            grand["years"][year]["opex"] += y["opex"]
+            grand["years"][year]["total"] += y["total"]
+        zone["totals"] = zone_totals
+        grand["overall"]["capex"] += zone_totals["capex"]
+        grand["overall"]["opex"] += zone_totals["opex"]
+        grand["overall"]["total"] += zone_totals["total"]
+        zones.append(zone)
+
+    top_projects = {}
+    for year in (2026, 2027):
+        ranked = []
+        for project in project_rows:
+            capex = float(project.get(f"capex_{year}") or 0)
+            opex = float(project.get(f"opex_{year}") or 0)
+            total = capex + opex
+            if total <= 0:
+                continue
+            ranked.append(
+                {
+                    "id": project["line_id"],
+                    "title": project["title"],
+                    "capex": capex,
+                    "opex": opex,
+                    "total": total,
+                }
+            )
+        ranked.sort(key=lambda p: (-p["total"], p["id"]))
+        top_projects[year] = ranked[:10]
+
+    return {
+        "years": list(COST_YEARS),
+        "zones": zones,
+        "grand_total": grand,
+        "top_projects": top_projects,
+    }
+
+
 def fetch_architecture_graph():
     """Return architecture components and inter-component relationships."""
     init_db()

@@ -6,6 +6,7 @@ from admin import admin_bp
 from architecture_roadmap import architecture_roadmap_bp
 from architecture_views import architecture_views_bp
 from catalog import catalog_bp
+from cost_dashboard import cost_dashboard_bp
 from db import get_db_status, init_db
 from diagram import diagram_bp
 from sitemap import sitemap_bp
@@ -17,6 +18,7 @@ app.register_blueprint(diagram_bp)
 app.register_blueprint(architecture_roadmap_bp)
 app.register_blueprint(architecture_views_bp)
 app.register_blueprint(catalog_bp)
+app.register_blueprint(cost_dashboard_bp)
 app.register_blueprint(sitemap_bp)
 app.register_blueprint(zones_bp)
 app.register_blueprint(admin_bp)
