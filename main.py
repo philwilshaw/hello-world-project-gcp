@@ -37,8 +37,6 @@ def hello():
     safe_label = "available" if status["has_last_safe"] else "not set yet"
     bucket = status["database_bucket"] or "local file only"
     env = esc(ENVIRONMENT)
-    disabled_attr = "" if status["has_last_safe"] else " disabled"
-
     body = f"""
 <div class="prose">
 <div class="panel">
@@ -52,17 +50,17 @@ def hello():
     Link add/remove controls are disabled when changes are locked.
   </p>
   <p class="note">
-    This environment has its own database, with restore-to-last-safe available from
-    this page. Hourly backup and midnight reset jobs are built into the app, but the
-    Cloud Scheduler setup is still outstanding. Demo edits should be treated as
-    temporary unless a new last-safe snapshot is created from Cursor.
+    This environment has its own database. Hourly backup and midnight reset jobs are
+    built into the app, but the Cloud Scheduler setup is still outstanding. Demo edits
+    should be treated as temporary unless a new last-safe snapshot is created from
+    Cursor.
   </p>
   <p style="margin:0.85rem 0 0.35rem">
-    <button id="restore-btn" type="button"{disabled_attr}>
+    <button id="restore-btn" class="restore-btn" type="button" disabled
+      title="Restore is temporarily disabled">
       Restore database to last safe copy
     </button>
   </p>
-  <div id="restore-status"></div>
 </div>
 
 <h2>What I accomplished</h2>
@@ -229,43 +227,11 @@ I started with no experience and now I can:
 </div>
 """
 
-    restore_js = f"""
-<script>
-  const restoreBtn = document.getElementById("restore-btn");
-  const restoreStatus = document.getElementById("restore-status");
-  if (restoreBtn) {{
-    restoreBtn.addEventListener("click", async () => {{
-      const ok = window.confirm(
-        "Restore the {ENVIRONMENT} database to the last safe copy?\\n\\nCurrent link edits in this environment will be discarded."
-      );
-      if (!ok) return;
-      restoreBtn.disabled = true;
-      restoreStatus.textContent = "Restoring...";
-      try {{
-        const response = await fetch("/api/db/restore-last-safe", {{ method: "POST" }});
-        const data = await response.json();
-        if (!response.ok) {{
-          restoreStatus.textContent = data.error || "Restore failed";
-          restoreBtn.disabled = false;
-          return;
-        }}
-        restoreStatus.textContent = data.message || "Restored.";
-        window.setTimeout(() => window.location.reload(), 800);
-      }} catch (err) {{
-        restoreStatus.textContent = "Restore failed";
-        restoreBtn.disabled = false;
-      }}
-    }});
-  }}
-</script>
-"""
-
     return render_page(
         title="My First Cloud Deployment Project",
         subtitle="Welcome to the demo site",
         active="Home",
         body=body,
-        extra_js=restore_js,
     )
 
 
