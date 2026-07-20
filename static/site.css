@@ -30,15 +30,25 @@
   padding: 0;
 }
 
+html {
+  height: 100%;
+  background-color: var(--bg);
+  overscroll-behavior-y: none;
+}
+
 body {
   font-family: "Segoe UI", "Helvetica Neue", sans-serif;
-  background:
+  background-color: var(--bg);
+  background-image:
     radial-gradient(ellipse at 15% 0%, #1b2a3b 0%, transparent 45%),
     linear-gradient(180deg, #121820 0%, var(--bg) 100%);
   color: var(--text);
-  min-height: 100vh;
+  min-height: 100%;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
   display: flex;
   flex-direction: column;
+  overscroll-behavior-y: none;
 }
 
 a {
@@ -501,9 +511,10 @@ button.remove-link:disabled {
 .site-footer {
   margin-top: auto;
   flex-shrink: 0;
-  padding: 1.25rem 1.5rem 1.75rem;
+  width: 100%;
+  padding: 1.25rem 1.5rem calc(1.75rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--line);
-  background: rgba(16, 21, 28, 0.96);
+  background: var(--bg);
   color: var(--muted);
   font-size: 0.82rem;
   line-height: 1.5;
