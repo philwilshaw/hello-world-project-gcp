@@ -137,6 +137,56 @@ def hello():
 <li>Prepared backup and midnight-reset endpoints, plus a saved setup prompt for finishing Cloud Scheduler later</li>
 </ul>
 
+<h3>10. Added a zones hierarchy</h3>
+<ul>
+<li>Modelled L1 zones, L2 sub-zones, and L3 capabilities in the database</li>
+<li>Built a Zones page with zone owners, descriptions, and entity counts</li>
+<li>Added toggles to show or hide L2 and L3 detail on the Zones page</li>
+<li>Linked projects, risks, architecture, budgets, and run contracts back to zones and sub-zones</li>
+</ul>
+
+<h3>11. Expanded the data model from an Excel schema workbook</h3>
+<ul>
+<li>Updated the schema to match a multi-tab Excel workbook covering projects, risks, architecture, budgets, run contracts, and edges</li>
+<li>Added new <code>budgets</code> and <code>run_contracts</code> tables, and expanded project / risk / architecture columns</li>
+<li>Generated 50 sample records each for projects, risks, architecture, budgets, and run contracts</li>
+<li>Wired edges so projects link to risks, architecture, budgets, and run contracts, following the workbook rules</li>
+</ul>
+
+<h3>12. Built budget and run contract catalogs</h3>
+<ul>
+<li>Added Budget List and Budget Detail pages with all budget columns</li>
+<li>Added Run Contract List and Run Contract Detail pages with all contract columns</li>
+<li>Extended every detail page to show linked projects, risks, architecture, budgets, and run contracts</li>
+<li>Included cross-links via shared projects, plus owning-budget and funded-by-budget relationships</li>
+</ul>
+
+<h3>13. Upgraded the Project Roadmap and Architecture Model</h3>
+<ul>
+<li>Renamed Timeline to Project Roadmap and grouped projects by zone and sub-zone in faint boxes</li>
+<li>Aligned milestones to project end dates, stacked them vertically with one-line labels, and collapsed empty space when filters hide them</li>
+<li>Slimmed project bars to title plus ID / dates</li>
+<li>Grouped the Architecture Model by Zone → SubZone → Capability in a denser 3-column layout</li>
+<li>Added checkboxes to show or hide architecture descriptions and owners, with cards shrinking when content is hidden</li>
+</ul>
+
+<h3>14. Built a Cost Dashboard</h3>
+<ul>
+<li>Added a Cost Dashboard page summarising budget Capex, Opex, and Total by zone for 2026–2029</li>
+<li>Shaded total columns and separated year groups with whitespace</li>
+<li>Added a stacked Capex / Opex bar chart grouped by zone then year, with £0.0m labels</li>
+<li>Listed the top 10 most expensive projects for 2026 and 2027, each linking to the project detail page</li>
+</ul>
+
+<h3>15. Polished the shared site chrome</h3>
+<ul>
+<li>Added a PhilTech logo in the header and increased H1 / H2 sizes across the site</li>
+<li>Made page subtitles render as H2 and renamed nav / page titles for clearer labels</li>
+<li>Centered all pages in a 1400px max-width container without changing inner content alignment</li>
+<li>Kept environment and database status messaging on Home only</li>
+<li>Expanded the site map to include budgets, run contracts, and the newer pages</li>
+</ul>
+
 <hr>
 
 <h2>What I built (big picture)</h2>
@@ -150,8 +200,8 @@ A working cloud system combining:
 <li>Serverless deployment (Cloud Run)</li>
 <li>Automated builds triggered by code changes</li>
 <li>Separate development and production environments</li>
-<li>A SQLite-backed demo data model for projects, risks, and architecture</li>
-<li>Interactive timelines, catalogs, architecture diagrams, and roadmap views</li>
+<li>A SQLite-backed data model for zones, projects, risks, architecture, budgets, and run contracts</li>
+<li>Interactive roadmaps, catalogs, architecture views, and a cost dashboard</li>
 <li>Environment-specific data storage with restore and write-lock controls</li>
 </ul>
 
@@ -175,6 +225,8 @@ A working cloud system combining:
 <li>Designing a simple data model and keeping sample relationships consistent across pages</li>
 <li>Working out how ephemeral Cloud Run storage differs from durable database storage</li>
 <li>Separating demo editability from Cursor-only admin controls</li>
+<li>Turning an Excel workbook into a regenerated schema and large linked sample dataset</li>
+<li>Keeping roadmaps and dashboards readable as the volume of demo data grew</li>
 </ul>
 
 <hr>
@@ -191,8 +243,9 @@ A working cloud system combining:
 <li>How branch-based workflows support safe testing before production releases</li>
 <li>How environment variables distinguish development from production deployments</li>
 <li>How SQLite can power a small interactive demo before moving to a fuller database setup</li>
-<li>How timelines and architecture views can be driven from the same underlying tables and edges</li>
+<li>How timelines, architecture views, and cost views can be driven from the same underlying tables and edges</li>
 <li>How admin actions can be kept out of the public UI while still being controllable from Cursor</li>
+<li>How zone / sub-zone hierarchy and cross-linked catalogs make a portfolio demo feel coherent</li>
 </ul>
 
 <hr>
@@ -212,9 +265,10 @@ I started with no experience and now I can:
 <li>Let automated builds deploy my app when I push code</li>
 <li>Grow a hello-world app into a multi-page interactive demo with real sample data</li>
 <li>Iterate quickly with Cursor while keeping environment-specific cloud deployments working</li>
+<li>Extend a schema from spreadsheet instructions and keep list, detail, roadmap, and dashboard pages in sync</li>
 </ul>
 
-<p><strong>This project represents my first complete end-to-end cloud deployment, with separate development and production environments, plus an interactive project/risk/architecture demo on top.</strong></p>
+<p><strong>This project represents my first complete end-to-end cloud deployment, with separate development and production environments, plus an interactive portfolio demo covering zones, projects, risks, architecture, budgets, run contracts, and cost.</strong></p>
 
 <hr>
 
@@ -224,7 +278,6 @@ I started with no experience and now I can:
 <li><strong>Database backup scheduled jobs</strong> — finish Cloud Scheduler setup for hourly backups and midnight reset-to-last-safe (prompt saved in <code>scripts/tomorrow-scheduler-setup-prompt.txt</code>)</li>
 <li><strong>Admin token and bucket permissions</strong> — set <code>ADMIN_TOKEN</code> on Cloud Run and confirm each environment can read/write its own GCS database bucket</li>
 <li><strong>Mark and manage last-safe snapshots from Cursor</strong> — use the admin commands day to day once the token/jobs setup is complete</li>
-<li><strong>Excel-driven schema and sample data</strong> — use a 3-tab Excel workbook as the source for project, risk, and architecture column headings and sample rows; ignore marked columns; honour allowed-value notes above the table; regenerate edges; and provide a downloadable sample workbook to share</li>
 </ul>
 </div>
 """
