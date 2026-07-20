@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "local").strip() or "local"
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # Prefer explicit bucket; otherwise derive a per-environment default name when
 # running in GCP-style envs. Local keeps files on disk only unless overridden.
@@ -50,13 +50,18 @@ ARCHITECTURE_RELATIONSHIPS = (
     "version upgrade",
     "decommissioned",
 )
-ARCHITECTURE_OUTLOOKS = (
-    "to be implemented",
-    "continue",
-    "to be decommissioned",
-    "upgrade",
-    "decommissioned",
-)
+BUDGET_RELATIONSHIPS = ("creates", "terminates")
+RUN_CONTRACT_RELATIONSHIPS = ("terminates",)
+LINKED_TYPES = ("risk", "architecture", "budget", "run_contract")
+
+BUDGET_STATUS_RAG = {
+    "Proposed": "Amber",
+    "Budget agreed": "Green",
+    "in flight": "Green",
+    "Budget not agreed": "Red",
+    "Completed": "Green",
+    "Cancelled": "Red",
+}
 
 
 def get_connection():
@@ -272,6 +277,8 @@ def init_db():
                 """
                 DROP TABLE IF EXISTS architecture_edges;
                 DROP TABLE IF EXISTS edges;
+                DROP TABLE IF EXISTS run_contracts;
+                DROP TABLE IF EXISTS budgets;
                 DROP TABLE IF EXISTS architecture_components;
                 DROP TABLE IF EXISTS risks;
                 DROP TABLE IF EXISTS projects;
@@ -309,61 +316,117 @@ def init_db():
                 FOREIGN KEY (sub_zone_id) REFERENCES sub_zones(id)
             );
 
-            CREATE TABLE IF NOT EXISTS projects (
-                id TEXT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS budgets (
+                line_id TEXT PRIMARY KEY,
+                budget_id TEXT NOT NULL UNIQUE,
                 title TEXT NOT NULL,
                 description TEXT NOT NULL,
-                accountable_contact_name TEXT NOT NULL,
-                start_date TEXT NOT NULL,
-                end_date TEXT NOT NULL,
-                rag_status TEXT NOT NULL,
-                capex_gbp REAL NOT NULL,
-                opex_gbp REAL NOT NULL,
+                status TEXT NOT NULL,
+                category TEXT NOT NULL,
+                spend_type TEXT NOT NULL,
                 sub_zone_id TEXT NOT NULL,
-                CHECK (start_date < end_date),
+                capex_2026 REAL NOT NULL DEFAULT 0,
+                opex_2026 REAL NOT NULL DEFAULT 0,
+                capex_2027 REAL NOT NULL DEFAULT 0,
+                opex_2027 REAL NOT NULL DEFAULT 0,
+                capex_2028 REAL NOT NULL DEFAULT 0,
+                opex_2028 REAL NOT NULL DEFAULT 0,
+                capex_2029 REAL NOT NULL DEFAULT 0,
+                opex_2029 REAL NOT NULL DEFAULT 0,
+                contact TEXT NOT NULL,
+                FOREIGN KEY (sub_zone_id) REFERENCES sub_zones(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS projects (
+                line_id TEXT PRIMARY KEY,
+                budget_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                sub_zone_id TEXT NOT NULL,
+                priority_2027 TEXT NOT NULL DEFAULT '',
+                outcomes TEXT NOT NULL DEFAULT '',
+                compliance_impact TEXT NOT NULL DEFAULT '',
+                delivery_approach TEXT NOT NULL DEFAULT '',
+                delivery_constraints TEXT NOT NULL DEFAULT '',
+                delivery_assumptions TEXT NOT NULL DEFAULT '',
+                out_of_scope TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (budget_id) REFERENCES budgets(budget_id),
                 FOREIGN KEY (sub_zone_id) REFERENCES sub_zones(id)
             );
 
             CREATE TABLE IF NOT EXISTS risks (
                 id TEXT PRIMARY KEY,
-                title TEXT NOT NULL,
-                description TEXT NOT NULL,
-                impact TEXT NOT NULL,
-                proximity TEXT NOT NULL,
-                value TEXT NOT NULL,
                 sub_zone_id TEXT NOT NULL,
+                risk_response TEXT NOT NULL,
+                status TEXT NOT NULL,
+                category TEXT NOT NULL,
+                risk_score INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                risk_owner TEXT NOT NULL,
+                proximity_band TEXT NOT NULL,
+                current_likelihood TEXT NOT NULL,
+                current_impact_band TEXT NOT NULL,
+                date_created TEXT NOT NULL,
+                date_closed TEXT,
                 FOREIGN KEY (sub_zone_id) REFERENCES sub_zones(id)
             );
 
             CREATE TABLE IF NOT EXISTS architecture_components (
                 id TEXT PRIMARY KEY,
-                title TEXT NOT NULL,
+                name TEXT NOT NULL,
                 description TEXT NOT NULL,
-                component_type TEXT NOT NULL,
-                owner TEXT NOT NULL,
-                capability TEXT NOT NULL,
-                outlook TEXT NOT NULL,
-                implemented_date TEXT,
-                go_live_date TEXT,
-                decommissioned_date TEXT,
+                comments TEXT NOT NULL DEFAULT '',
                 sub_zone_id TEXT NOT NULL,
                 capability_id TEXT NOT NULL,
+                architect TEXT NOT NULL,
+                architecture_outlook TEXT NOT NULL,
+                deployment_state TEXT NOT NULL,
+                deployment_date TEXT,
+                decommission_date TEXT,
+                in_scope_of_esa TEXT NOT NULL,
+                class_of_service TEXT NOT NULL,
+                host_type TEXT NOT NULL,
+                replaced_by_arch_id TEXT,
+                support_partner_l1 TEXT NOT NULL DEFAULT '',
+                support_partner_l2 TEXT NOT NULL DEFAULT '',
+                support_partner_l3 TEXT NOT NULL DEFAULT '',
+                vendor TEXT NOT NULL DEFAULT '',
                 FOREIGN KEY (sub_zone_id) REFERENCES sub_zones(id),
-                FOREIGN KEY (capability_id) REFERENCES capabilities(id)
+                FOREIGN KEY (capability_id) REFERENCES capabilities(id),
+                FOREIGN KEY (replaced_by_arch_id) REFERENCES architecture_components(id)
             );
 
-            -- Links projects to risks or architecture components.
-            -- linked_type is 'risk' or 'architecture'.
+            CREATE TABLE IF NOT EXISTS run_contracts (
+                fin_id TEXT PRIMARY KEY,
+                service_type TEXT NOT NULL,
+                linked_budget_id TEXT NOT NULL,
+                vendor_name TEXT NOT NULL,
+                manufacturer TEXT NOT NULL,
+                contract_name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                detailed_description TEXT NOT NULL,
+                contract_start_date TEXT NOT NULL,
+                contract_end_date TEXT NOT NULL,
+                po_renewal_date TEXT NOT NULL,
+                contract_status TEXT NOT NULL,
+                vendor_manager TEXT NOT NULL,
+                operational_owner TEXT NOT NULL,
+                sub_zone_id TEXT NOT NULL,
+                FOREIGN KEY (linked_budget_id) REFERENCES budgets(budget_id),
+                FOREIGN KEY (sub_zone_id) REFERENCES sub_zones(id)
+            );
+
+            -- Links projects to risks, architecture, budgets, or run contracts.
             CREATE TABLE IF NOT EXISTS edges (
                 id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL,
                 linked_type TEXT NOT NULL,
                 linked_id TEXT NOT NULL,
                 relationship TEXT NOT NULL,
-                FOREIGN KEY (project_id) REFERENCES projects(id)
+                FOREIGN KEY (project_id) REFERENCES projects(line_id)
             );
 
-            -- Relationships between architecture components.
             CREATE TABLE IF NOT EXISTS architecture_edges (
                 id TEXT PRIMARY KEY,
                 source_id TEXT NOT NULL,
@@ -455,301 +518,278 @@ def _seed_zones(conn):
 
 
 def _seed(conn):
-    from zones_data import (
-        ARCHITECTURE_ASSIGNMENTS,
-        PROJECT_SUB_ZONES,
-        RISK_SUB_ZONES,
+    from seed_data import (
+        apply_architecture_replacements,
+        build_zone_maps,
+        generate_architecture,
+        generate_architecture_edges,
+        generate_budgets,
+        generate_edges,
+        generate_projects,
+        generate_risks,
+        generate_run_contracts,
     )
 
-    sub_zone_by_name, capability_by_pair = _seed_zones(conn)
+    _seed_zones(conn)
+    zone_maps = build_zone_maps(conn)
 
+    budgets = generate_budgets(zone_maps, 50)
+    conn.executemany(
+        """
+        INSERT INTO budgets (
+            line_id, budget_id, title, description, status, category,
+            spend_type, sub_zone_id, capex_2026, opex_2026, capex_2027,
+            opex_2027, capex_2028, opex_2028, capex_2029, opex_2029, contact
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                b["line_id"],
+                b["budget_id"],
+                b["title"],
+                b["description"],
+                b["status"],
+                b["category"],
+                b["spend_type"],
+                b["sub_zone_id"],
+                b["capex_2026"],
+                b["opex_2026"],
+                b["capex_2027"],
+                b["opex_2027"],
+                b["capex_2028"],
+                b["opex_2028"],
+                b["capex_2029"],
+                b["opex_2029"],
+                b["contact"],
+            )
+            for b in budgets
+        ],
+    )
+
+    projects = generate_projects(budgets, zone_maps, 50)
     conn.executemany(
         """
         INSERT INTO projects (
-            id, title, description, accountable_contact_name,
-            start_date, end_date, rag_status, capex_gbp, opex_gbp, sub_zone_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        [
-            (
-                "p1",
-                "Website Redesign",
-                "Rebuild the public website to modernise brand presence and reduce reliance on outdated pages.",
-                "Aisha Khan",
-                "2026-03-01",
-                "2026-11-30",
-                "Amber",
-                180000.00,
-                42000.00,
-                sub_zone_by_name[PROJECT_SUB_ZONES["p1"]],
-            ),
-            (
-                "p2",
-                "Mobile App Launch",
-                "Deliver a customer mobile app so routine requests can be handled without call-centre contact.",
-                "James O'Neill",
-                "2026-06-15",
-                "2027-04-30",
-                "Green",
-                320000.00,
-                75000.00,
-                sub_zone_by_name[PROJECT_SUB_ZONES["p2"]],
-            ),
-            (
-                "p3",
-                "Data Migration",
-                "Move finance records onto the cloud platform to remove fragile legacy reporting dependencies.",
-                "Priya Sharma",
-                "2026-09-01",
-                "2027-02-28",
-                "Red",
-                95000.00,
-                28000.00,
-                sub_zone_by_name[PROJECT_SUB_ZONES["p3"]],
-            ),
-        ],
-    )
-
-    conn.executemany(
-        """
-        INSERT INTO risks (
-            id, title, description, impact, proximity, value, sub_zone_id
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        [
-            (
-                "r1",
-                "Outdated Digital Presence",
-                "Corporate website no longer reflects current products or accessibility standards.",
-                "High — damages trust and conversion across public channels.",
-                "Immediate — customer feedback already cites confusing content.",
-                "Estimated brand and conversion impact around £120,000 a year.",
-                sub_zone_by_name[RISK_SUB_ZONES["r1"]],
-            ),
-            (
-                "r2",
-                "Weak Customer Self-Service",
-                "Customers cannot complete common tasks online and default to phone support.",
-                "Medium — keeps operating cost and queue times elevated.",
-                "Near-term — volumes rise further during seasonal peaks.",
-                "Avoidable support cost estimated at £90,000 a year.",
-                sub_zone_by_name[RISK_SUB_ZONES["r2"]],
-            ),
-            (
-                "r3",
-                "Critical Skills Concentration",
-                "Essential digital delivery knowledge sits with too few specialists.",
-                "High — absence would slow several corporate change programmes.",
-                "Ongoing until knowledge is shared and documented.",
-                "Contingency cover and delay exposure roughly £45,000.",
-                sub_zone_by_name[RISK_SUB_ZONES["r3"]],
-            ),
-            (
-                "r4",
-                "Fragile Legacy Finance Data",
-                "Core finance reporting depends on unsupported on-premise systems.",
-                "High — audit and decision-making risk if systems fail.",
-                "Closer to year-end reporting cycles in early 2027.",
-                "Potential remediation and audit cost near £150,000.",
-                sub_zone_by_name[RISK_SUB_ZONES["r4"]],
-            ),
-        ],
-    )
-
-    def _arch_row(
-        arch_id,
-        title,
-        description,
-        component_type,
-        owner,
-        outlook,
-        implemented_date,
-        go_live_date,
-        decommissioned_date,
-    ):
-        sub_zone_name, capability_name = ARCHITECTURE_ASSIGNMENTS[arch_id]
-        return (
-            arch_id,
-            title,
-            description,
-            component_type,
-            owner,
-            capability_name,
-            outlook,
-            implemented_date,
-            go_live_date,
-            decommissioned_date,
-            sub_zone_by_name[sub_zone_name],
-            capability_by_pair[(sub_zone_name, capability_name)],
-        )
-
-    conn.executemany(
-        """
-        INSERT INTO architecture_components (
-            id, title, description, component_type, owner, capability, outlook,
-            implemented_date, go_live_date, decommissioned_date,
-            sub_zone_id, capability_id
+            line_id, budget_id, title, description, sub_zone_id,
+            priority_2027, outcomes, compliance_impact, delivery_approach,
+            delivery_constraints, delivery_assumptions, out_of_scope
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
-            _arch_row(
-                "a1",
-                "Public Website",
-                "Customer-facing web presence and content delivery stack.",
-                "Application",
-                "Digital Channels",
-                "upgrade",
-                "2020-01-15",
-                "2020-06-01",
-                None,
-            ),
-            _arch_row(
-                "a2",
-                "Mobile Banking App",
-                "iOS and Android app for authenticated customer journeys.",
-                "Application",
-                "Digital Channels",
-                "to be implemented",
-                None,
-                None,
-                None,
-            ),
-            _arch_row(
-                "a3",
-                "Customer API Gateway",
-                "API layer used by web and mobile channels.",
-                "Integration",
-                "Platform Engineering",
-                "continue",
-                "2023-01-10",
-                "2023-06-30",
-                None,
-            ),
-            _arch_row(
-                "a4",
-                "Legacy Finance Ledger",
-                "On-premise finance system due to be retired after migration.",
-                "System",
-                "Finance Technology",
-                "to be decommissioned",
-                "2015-03-01",
-                "2015-09-01",
-                None,
-            ),
-            _arch_row(
-                "a5",
-                "Cloud Finance Warehouse",
-                "Target cloud data platform for finance reporting.",
-                "Data Platform",
-                "Data Engineering",
-                "to be implemented",
-                None,
-                None,
-                None,
-            ),
-            _arch_row(
-                "a6",
-                "Contact Centre Desktop",
-                "Agent desktop used for phone-based customer support.",
-                "Application",
-                "Customer Operations",
-                "continue",
-                "2019-02-01",
-                "2019-08-15",
-                None,
-            ),
-            _arch_row(
-                "a7",
-                "Batch File Hub",
-                "Legacy overnight file transfer service between channels and finance.",
-                "Integration",
-                "Platform Engineering",
-                "to be decommissioned",
-                "2016-05-01",
-                "2016-11-01",
-                None,
-            ),
-            _arch_row(
-                "a8",
-                "Event Streaming Bus",
-                "Near-real-time event backbone replacing batch file transfers.",
-                "Integration",
-                "Platform Engineering",
-                "upgrade",
-                "2025-01-15",
-                "2025-09-01",
-                None,
-            ),
-            _arch_row(
-                "a9",
-                "On-prem Reporting Mart",
-                "Historic reporting database retained only for audit archive access.",
-                "Data Platform",
-                "Data Engineering",
-                "decommissioned",
-                "2014-04-01",
-                "2014-10-01",
-                "2024-12-31",
-            ),
-            _arch_row(
-                "a10",
-                "Identity Service",
-                "Central authentication and authorisation for customer apps.",
-                "Platform",
-                "Security Engineering",
-                "continue",
-                "2022-01-01",
-                "2022-06-01",
-                None,
-            ),
+            (
+                p["line_id"],
+                p["budget_id"],
+                p["title"],
+                p["description"],
+                p["sub_zone_id"],
+                p["priority_2027"],
+                p["outcomes"],
+                p["compliance_impact"],
+                p["delivery_approach"],
+                p["delivery_constraints"],
+                p["delivery_assumptions"],
+                p["out_of_scope"],
+            )
+            for p in projects
         ],
     )
 
+    risks = generate_risks(zone_maps, 50)
+    conn.executemany(
+        """
+        INSERT INTO risks (
+            id, sub_zone_id, risk_response, status, category, risk_score,
+            name, description, risk_owner, proximity_band, current_likelihood,
+            current_impact_band, date_created, date_closed
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                r["id"],
+                r["sub_zone_id"],
+                r["risk_response"],
+                r["status"],
+                r["category"],
+                r["risk_score"],
+                r["name"],
+                r["description"],
+                r["risk_owner"],
+                r["proximity_band"],
+                r["current_likelihood"],
+                r["current_impact_band"],
+                r["date_created"],
+                r["date_closed"],
+            )
+            for r in risks
+        ],
+    )
+
+    architecture = generate_architecture(zone_maps, 50)
+    conn.executemany(
+        """
+        INSERT INTO architecture_components (
+            id, name, description, comments, sub_zone_id, capability_id,
+            architect, architecture_outlook, deployment_state, deployment_date,
+            decommission_date, in_scope_of_esa, class_of_service, host_type,
+            replaced_by_arch_id, support_partner_l1, support_partner_l2,
+            support_partner_l3, vendor
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                a["id"],
+                a["name"],
+                a["description"],
+                a["comments"],
+                a["sub_zone_id"],
+                a["capability_id"],
+                a["architect"],
+                a["architecture_outlook"],
+                a["deployment_state"],
+                a["deployment_date"],
+                a["decommission_date"],
+                a["in_scope_of_esa"],
+                a["class_of_service"],
+                a["host_type"],
+                None,
+                a["support_partner_l1"],
+                a["support_partner_l2"],
+                a["support_partner_l3"],
+                a["vendor"],
+            )
+            for a in architecture
+        ],
+    )
+    apply_architecture_replacements(conn, architecture)
+
+    run_contracts = generate_run_contracts(budgets, zone_maps, 50)
+    conn.executemany(
+        """
+        INSERT INTO run_contracts (
+            fin_id, service_type, linked_budget_id, vendor_name, manufacturer,
+            contract_name, description, detailed_description, contract_start_date,
+            contract_end_date, po_renewal_date, contract_status, vendor_manager,
+            operational_owner, sub_zone_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                rc["fin_id"],
+                rc["service_type"],
+                rc["linked_budget_id"],
+                rc["vendor_name"],
+                rc["manufacturer"],
+                rc["contract_name"],
+                rc["description"],
+                rc["detailed_description"],
+                rc["contract_start_date"],
+                rc["contract_end_date"],
+                rc["po_renewal_date"],
+                rc["contract_status"],
+                rc["vendor_manager"],
+                rc["operational_owner"],
+                rc["sub_zone_id"],
+            )
+            for rc in run_contracts
+        ],
+    )
+
+    edges = generate_edges(projects, risks, architecture, budgets, run_contracts)
     conn.executemany(
         """
         INSERT INTO edges (id, project_id, linked_type, linked_id, relationship)
         VALUES (?, ?, ?, ?, ?)
         """,
         [
-            ("e1", "p1", "risk", "r1", "resolves"),
-            ("e2", "p1", "risk", "r2", "reduces"),
-            ("e3", "p2", "risk", "r2", "resolves"),
-            ("e4", "p2", "risk", "r3", "reduces"),
-            ("e5", "p3", "risk", "r4", "resolves"),
-            ("e6", "p3", "risk", "r1", "reduces"),
-            ("e7", "p1", "architecture", "a1", "modified"),
-            ("e8", "p1", "architecture", "a3", "version upgrade"),
-            ("e9", "p2", "architecture", "a2", "implemented"),
-            ("e10", "p2", "architecture", "a3", "modified"),
-            ("e11", "p3", "architecture", "a4", "decommissioned"),
-            ("e12", "p3", "architecture", "a5", "implemented"),
-            ("e13", "p1", "architecture", "a8", "modified"),
-            ("e14", "p2", "architecture", "a10", "implemented"),
-            ("e15", "p3", "architecture", "a7", "decommissioned"),
+            (e["id"], e["project_id"], e["linked_type"], e["linked_id"], e["relationship"])
+            for e in edges
         ],
     )
 
+    arch_edges = generate_architecture_edges(architecture)
     conn.executemany(
         """
         INSERT INTO architecture_edges (id, source_id, target_id, relationship)
         VALUES (?, ?, ?, ?)
         """,
         [
-            ("ae1", "a1", "a3", "calls"),
-            ("ae2", "a2", "a3", "calls"),
-            ("ae3", "a1", "a10", "authenticates via"),
-            ("ae4", "a2", "a10", "authenticates via"),
-            ("ae5", "a6", "a3", "calls"),
-            ("ae6", "a3", "a8", "publishes to"),
-            ("ae7", "a7", "a4", "feeds"),
-            ("ae8", "a8", "a5", "feeds"),
-            ("ae9", "a5", "a4", "replaces"),
-            ("ae10", "a8", "a7", "replaces"),
-            ("ae11", "a9", "a4", "was sourced from"),
-            ("ae12", "a3", "a5", "reads"),
+            (ae["id"], ae["source_id"], ae["target_id"], ae["relationship"])
+            for ae in arch_edges
         ],
     )
+
+
+def _budget_year_range(budget):
+    """Return (start_date, end_date) ISO strings from budget spend years."""
+    years = []
+    for year in (2026, 2027, 2028, 2029):
+        capex = budget.get(f"capex_{year}", 0) or 0
+        opex = budget.get(f"opex_{year}", 0) or 0
+        if capex + opex > 0:
+            years.append(year)
+    if not years:
+        return "2026-01-01", "2026-12-31"
+    return f"{min(years)}-01-01", f"{max(years)}-12-31"
+
+
+def _budget_totals(budget):
+    capex = sum(budget.get(f"capex_{y}", 0) or 0 for y in (2026, 2027, 2028, 2029))
+    opex = sum(budget.get(f"opex_{y}", 0) or 0 for y in (2026, 2027, 2028, 2029))
+    return capex, opex
+
+
+def _enrich_project(project, budget=None):
+    """Add legacy timeline/display fields derived from the linked budget."""
+    row = dict(project)
+    row["id"] = row["line_id"]
+    if budget:
+        start, end = _budget_year_range(budget)
+        capex, opex = _budget_totals(budget)
+        row["start_date"] = start
+        row["end_date"] = end
+        row["capex_gbp"] = capex
+        row["opex_gbp"] = opex
+        row["rag_status"] = BUDGET_STATUS_RAG.get(budget["status"], "Amber")
+        row["budget_line_id"] = budget["line_id"]
+        row["budget_status"] = budget["status"]
+    return row
+
+
+def _enrich_risk(risk):
+    row = dict(risk)
+    row["title"] = row["name"]
+    row["impact"] = row["current_impact_band"]
+    row["proximity"] = row["proximity_band"]
+    row["value"] = f"Score {row['risk_score']}/10"
+    return row
+
+
+def _enrich_architecture(component, capability_name=None):
+    row = dict(component)
+    row["title"] = row["name"]
+    row["owner"] = row["architect"]
+    row["outlook"] = row["architecture_outlook"]
+    row["component_type"] = row["host_type"]
+    row["implemented_date"] = row.get("deployment_date")
+    row["go_live_date"] = row.get("deployment_date")
+    row["decommissioned_date"] = row.get("decommission_date")
+    if capability_name:
+        row["capability"] = capability_name
+    return row
+
+
+def _budgets_by_id(conn):
+    return {
+        row["budget_id"]: dict(row)
+        for row in conn.execute("SELECT * FROM budgets")
+    }
+
+
+def _capabilities_by_id(conn):
+    return {
+        row["id"]: row["name"]
+        for row in conn.execute("SELECT id, name FROM capabilities")
+    }
 
 
 def _fetch_by_ids(conn, table, ids):
@@ -795,26 +835,29 @@ def fetch_timeline_data():
             if edge["linked_type"] == "architecture"
         }
 
+        budgets = _budgets_by_id(conn)
         projects = []
         if project_ids:
             placeholders = ",".join("?" for _ in project_ids)
-            projects = [
-                dict(row)
-                for row in conn.execute(
-                    f"""
-                    SELECT *
-                    FROM projects
-                    WHERE id IN ({placeholders})
-                    ORDER BY start_date, id
-                    """,
-                    tuple(project_ids),
-                )
-            ]
+            for row in conn.execute(
+                f"""
+                SELECT *
+                FROM projects
+                WHERE line_id IN ({placeholders})
+                ORDER BY line_id
+                """,
+                tuple(project_ids),
+            ):
+                project = dict(row)
+                budget = budgets.get(project["budget_id"])
+                projects.append(_enrich_project(project, budget))
 
-        risks = _fetch_by_ids(conn, "risks", risk_ids)
-        architecture_components = _fetch_by_ids(
-            conn, "architecture_components", architecture_ids
-        )
+        risks = [_enrich_risk(r) for r in _fetch_by_ids(conn, "risks", risk_ids)]
+        caps = _capabilities_by_id(conn)
+        architecture_components = [
+            _enrich_architecture(c, caps.get(c.get("capability_id")))
+            for c in _fetch_by_ids(conn, "architecture_components", architecture_ids)
+        ]
 
     return {
         "projects": projects,
@@ -827,10 +870,11 @@ def fetch_timeline_data():
 def fetch_all_projects():
     init_db()
     with get_connection() as conn:
+        budgets = _budgets_by_id(conn)
         return [
-            dict(row)
+            _enrich_project(dict(row), budgets.get(row["budget_id"]))
             for row in conn.execute(
-                "SELECT * FROM projects ORDER BY start_date, id"
+                "SELECT * FROM projects ORDER BY line_id"
             )
         ]
 
@@ -839,7 +883,7 @@ def fetch_all_risks():
     init_db()
     with get_connection() as conn:
         return [
-            dict(row)
+            _enrich_risk(dict(row))
             for row in conn.execute("SELECT * FROM risks ORDER BY id")
         ]
 
@@ -847,14 +891,35 @@ def fetch_all_risks():
 def fetch_all_architecture():
     init_db()
     with get_connection() as conn:
+        caps = _capabilities_by_id(conn)
         return [
-            dict(row)
+            _enrich_architecture(dict(row), caps.get(row["capability_id"]))
             for row in conn.execute(
                 """
-                SELECT * FROM architecture_components
-                ORDER BY capability, title, id
+                SELECT a.*
+                FROM architecture_components a
+                LEFT JOIN capabilities c ON c.id = a.capability_id
+                ORDER BY c.name, a.name, a.id
                 """
             )
+        ]
+
+
+def fetch_all_budgets():
+    init_db()
+    with get_connection() as conn:
+        return [
+            dict(row)
+            for row in conn.execute("SELECT * FROM budgets ORDER BY line_id")
+        ]
+
+
+def fetch_all_run_contracts():
+    init_db()
+    with get_connection() as conn:
+        return [
+            dict(row)
+            for row in conn.execute("SELECT * FROM run_contracts ORDER BY fin_id")
         ]
 
 
@@ -862,12 +927,15 @@ def fetch_architecture_graph():
     """Return architecture components and inter-component relationships."""
     init_db()
     with get_connection() as conn:
+        caps = _capabilities_by_id(conn)
         components = [
-            dict(row)
+            _enrich_architecture(dict(row), caps.get(row["capability_id"]))
             for row in conn.execute(
                 """
-                SELECT * FROM architecture_components
-                ORDER BY capability, title, id
+                SELECT a.*
+                FROM architecture_components a
+                LEFT JOIN capabilities c ON c.id = a.capability_id
+                ORDER BY c.name, a.name, a.id
                 """
             )
         ]
@@ -904,13 +972,16 @@ def fetch_architecture_roadmap():
     init_db()
 
     with get_connection() as conn:
+        caps = _capabilities_by_id(conn)
+        budgets = _budgets_by_id(conn)
         components = [
             dict(row)
             for row in conn.execute(
                 """
-                SELECT *
-                FROM architecture_components
-                ORDER BY capability, title, id
+                SELECT a.*
+                FROM architecture_components a
+                LEFT JOIN capabilities c ON c.id = a.capability_id
+                ORDER BY c.name, a.name, a.id
                 """
             )
         ]
@@ -922,33 +993,38 @@ def fetch_architecture_roadmap():
                     e.id AS edge_id,
                     e.linked_id AS architecture_id,
                     e.relationship,
-                    p.id AS project_id,
+                    p.line_id AS project_id,
                     p.title AS project_title,
-                    p.start_date AS project_start_date,
-                    p.end_date AS project_end_date,
-                    p.rag_status
+                    p.budget_id,
+                    b.status AS budget_status
                 FROM edges e
-                JOIN projects p ON p.id = e.project_id
+                JOIN projects p ON p.line_id = e.project_id
+                JOIN budgets b ON b.budget_id = p.budget_id
                 WHERE e.linked_type = 'architecture'
-                ORDER BY p.end_date, p.id
+                ORDER BY p.line_id
                 """
             )
         ]
 
     links_by_arch = {}
     for link in project_links:
+        budget = budgets.get(link["budget_id"])
+        if budget:
+            start, end = _budget_year_range(budget)
+            link["project_start_date"] = start
+            link["project_end_date"] = end
+            link["rag_status"] = BUDGET_STATUS_RAG.get(budget["status"], "Amber")
         links_by_arch.setdefault(link["architecture_id"], []).append(link)
 
     roadmap = []
     for component in components:
+        enriched = _enrich_architecture(component, caps.get(component["capability_id"]))
         links = links_by_arch.get(component["id"], [])
-        implemented = component.get("implemented_date")
-        go_live = component.get("go_live_date")
-        decommissioned = component.get("decommissioned_date")
+        implemented = enriched.get("deployment_date")
+        go_live = enriched.get("deployment_date")
+        decommissioned = enriched.get("decommission_date")
         date_sources = {
-            "implemented_date": "architecture_components"
-            if implemented
-            else None,
+            "implemented_date": "architecture_components" if implemented else None,
             "go_live_date": "architecture_components" if go_live else None,
             "decommissioned_date": "architecture_components"
             if decommissioned
@@ -958,45 +1034,45 @@ def fetch_architecture_roadmap():
         for link in links:
             if link["relationship"] == "implemented":
                 if not implemented:
-                    implemented = link["project_start_date"]
+                    implemented = link.get("project_start_date")
                     date_sources["implemented_date"] = (
                         f"project edge {link['project_id']} start"
                     )
                 if not go_live:
-                    go_live = link["project_end_date"]
+                    go_live = link.get("project_end_date")
                     date_sources["go_live_date"] = (
                         f"project edge {link['project_id']} end"
                     )
             elif link["relationship"] == "decommissioned":
                 if not decommissioned:
-                    decommissioned = link["project_end_date"]
+                    decommissioned = link.get("project_end_date")
                     date_sources["decommissioned_date"] = (
                         f"project edge {link['project_id']} end"
                     )
 
         bar_start = implemented or go_live
-        bar_end = decommissioned  # None means still active
+        bar_end = decommissioned
 
         golives = [
             {
                 "project_id": link["project_id"],
                 "project_title": link["project_title"],
-                "date": link["project_end_date"],
+                "date": link.get("project_end_date"),
                 "relationship": link["relationship"],
-                "rag_status": link["rag_status"],
+                "rag_status": link.get("rag_status", "Amber"),
             }
             for link in links
         ]
 
         roadmap.append(
             {
-                "id": component["id"],
-                "title": component["title"],
-                "description": component["description"],
-                "component_type": component["component_type"],
-                "owner": component["owner"],
-                "capability": component["capability"],
-                "outlook": component["outlook"],
+                "id": enriched["id"],
+                "title": enriched["title"],
+                "description": enriched["description"],
+                "component_type": enriched["component_type"],
+                "owner": enriched["owner"],
+                "capability": enriched.get("capability", ""),
+                "outlook": enriched["outlook"],
                 "implemented_date": implemented,
                 "go_live_date": go_live,
                 "decommissioned_date": decommissioned,
@@ -1015,18 +1091,20 @@ def fetch_project_detail(project_id):
     init_db()
     with get_connection() as conn:
         project = conn.execute(
-            "SELECT * FROM projects WHERE id = ?", (project_id,)
+            "SELECT * FROM projects WHERE line_id = ?", (project_id,)
         ).fetchone()
         if project is None:
             return None
 
+        budgets = _budgets_by_id(conn)
+        budget = budgets.get(project["budget_id"])
         zone_ctx = fetch_sub_zone_context(conn, project["sub_zone_id"])
-        project_dict = dict(project)
+        project_dict = _enrich_project(project, budget)
         if zone_ctx:
             project_dict.update(zone_ctx)
 
         linked_risks = [
-            dict(row)
+            {**_enrich_risk(dict(row)), "edge_id": row["edge_id"], "relationship": row["relationship"]}
             for row in conn.execute(
                 """
                 SELECT r.*, e.id AS edge_id, e.relationship
@@ -1038,8 +1116,13 @@ def fetch_project_detail(project_id):
                 (project_id,),
             )
         ]
+        caps = _capabilities_by_id(conn)
         linked_architecture = [
-            dict(row)
+            {
+                **_enrich_architecture(dict(row), caps.get(row["capability_id"])),
+                "edge_id": row["edge_id"],
+                "relationship": row["relationship"],
+            }
             for row in conn.execute(
                 """
                 SELECT a.*, e.id AS edge_id, e.relationship
@@ -1051,11 +1134,39 @@ def fetch_project_detail(project_id):
                 (project_id,),
             )
         ]
+        linked_budgets = [
+            {**dict(row), "edge_id": row["edge_id"], "relationship": row["relationship"]}
+            for row in conn.execute(
+                """
+                SELECT b.*, e.id AS edge_id, e.relationship
+                FROM edges e
+                JOIN budgets b ON b.line_id = e.linked_id
+                WHERE e.project_id = ? AND e.linked_type = 'budget'
+                ORDER BY b.line_id
+                """,
+                (project_id,),
+            )
+        ]
+        linked_run_contracts = [
+            {**dict(row), "edge_id": row["edge_id"], "relationship": row["relationship"]}
+            for row in conn.execute(
+                """
+                SELECT rc.*, e.id AS edge_id, e.relationship
+                FROM edges e
+                JOIN run_contracts rc ON rc.fin_id = e.linked_id
+                WHERE e.project_id = ? AND e.linked_type = 'run_contract'
+                ORDER BY rc.fin_id
+                """,
+                (project_id,),
+            )
+        ]
 
     return {
         "project": project_dict,
         "linked_risks": linked_risks,
         "linked_architecture": linked_architecture,
+        "linked_budgets": linked_budgets,
+        "linked_run_contracts": linked_run_contracts,
     }
 
 
@@ -1069,24 +1180,27 @@ def fetch_risk_detail(risk_id):
         if risk is None:
             return None
 
+        budgets = _budgets_by_id(conn)
         zone_ctx = fetch_sub_zone_context(conn, risk["sub_zone_id"])
-        risk_dict = dict(risk)
+        risk_dict = _enrich_risk(risk)
         if zone_ctx:
             risk_dict.update(zone_ctx)
 
-        linked_projects = [
-            dict(row)
-            for row in conn.execute(
-                """
-                SELECT p.*, e.id AS edge_id, e.relationship
-                FROM edges e
-                JOIN projects p ON p.id = e.project_id
-                WHERE e.linked_type = 'risk' AND e.linked_id = ?
-                ORDER BY p.start_date, p.id
-                """,
-                (risk_id,),
-            )
-        ]
+        linked_projects = []
+        for row in conn.execute(
+            """
+            SELECT p.*, e.id AS edge_id, e.relationship
+            FROM edges e
+            JOIN projects p ON p.line_id = e.project_id
+            WHERE e.linked_type = 'risk' AND e.linked_id = ?
+            ORDER BY p.line_id
+            """,
+            (risk_id,),
+        ):
+            project = _enrich_project(dict(row), budgets.get(row["budget_id"]))
+            project["edge_id"] = row["edge_id"]
+            project["relationship"] = row["relationship"]
+            linked_projects.append(project)
 
     return {
         "risk": risk_dict,
@@ -1105,24 +1219,30 @@ def fetch_architecture_detail(architecture_id):
         if component is None:
             return None
 
+        budgets = _budgets_by_id(conn)
+        caps = _capabilities_by_id(conn)
         zone_ctx = fetch_sub_zone_context(conn, component["sub_zone_id"])
-        component_dict = dict(component)
+        component_dict = _enrich_architecture(
+            component, caps.get(component["capability_id"])
+        )
         if zone_ctx:
             component_dict.update(zone_ctx)
 
-        linked_projects = [
-            dict(row)
-            for row in conn.execute(
-                """
-                SELECT p.*, e.id AS edge_id, e.relationship
-                FROM edges e
-                JOIN projects p ON p.id = e.project_id
-                WHERE e.linked_type = 'architecture' AND e.linked_id = ?
-                ORDER BY p.start_date, p.id
-                """,
-                (architecture_id,),
-            )
-        ]
+        linked_projects = []
+        for row in conn.execute(
+            """
+            SELECT p.*, e.id AS edge_id, e.relationship
+            FROM edges e
+            JOIN projects p ON p.line_id = e.project_id
+            WHERE e.linked_type = 'architecture' AND e.linked_id = ?
+            ORDER BY p.line_id
+            """,
+            (architecture_id,),
+        ):
+            project = _enrich_project(dict(row), budgets.get(row["budget_id"]))
+            project["edge_id"] = row["edge_id"]
+            project["relationship"] = row["relationship"]
+            linked_projects.append(project)
 
     return {
         "architecture": component_dict,
@@ -1131,9 +1251,24 @@ def fetch_architecture_detail(architecture_id):
 
 
 def _item_exists(conn, linked_type, linked_id):
-    table = "risks" if linked_type == "risk" else "architecture_components"
+    table_map = {
+        "risk": "risks",
+        "architecture": "architecture_components",
+        "budget": "budgets",
+        "run_contract": "run_contracts",
+    }
+    id_column_map = {
+        "risk": "id",
+        "architecture": "id",
+        "budget": "line_id",
+        "run_contract": "fin_id",
+    }
+    table = table_map.get(linked_type)
+    id_column = id_column_map.get(linked_type)
+    if not table:
+        return False
     row = conn.execute(
-        f"SELECT 1 FROM {table} WHERE id = ?", (linked_id,)
+        f"SELECT 1 FROM {table} WHERE {id_column} = ?", (linked_id,)
     ).fetchone()
     return row is not None
 
@@ -1143,25 +1278,30 @@ def add_link(project_id, linked_type, linked_id, relationship):
     if not get_writes_enabled():
         return False, "database changes are currently disabled", None
 
-    if linked_type not in ("risk", "architecture"):
-        return False, "linked_type must be risk or architecture", None
+    if linked_type not in LINKED_TYPES:
+        return False, f"linked_type must be one of {LINKED_TYPES}", None
 
     if linked_type == "risk" and relationship not in RISK_RELATIONSHIPS:
         return False, f"relationship must be one of {RISK_RELATIONSHIPS}", None
-    if (
-        linked_type == "architecture"
-        and relationship not in ARCHITECTURE_RELATIONSHIPS
-    ):
+    if linked_type == "architecture" and relationship not in ARCHITECTURE_RELATIONSHIPS:
         return (
             False,
             f"relationship must be one of {ARCHITECTURE_RELATIONSHIPS}",
+            None,
+        )
+    if linked_type == "budget" and relationship not in BUDGET_RELATIONSHIPS:
+        return False, f"relationship must be one of {BUDGET_RELATIONSHIPS}", None
+    if linked_type == "run_contract" and relationship not in RUN_CONTRACT_RELATIONSHIPS:
+        return (
+            False,
+            f"relationship must be one of {RUN_CONTRACT_RELATIONSHIPS}",
             None,
         )
 
     init_db()
     with get_connection() as conn:
         project = conn.execute(
-            "SELECT id FROM projects WHERE id = ?", (project_id,)
+            "SELECT line_id FROM projects WHERE line_id = ?", (project_id,)
         ).fetchone()
         if project is None:
             return False, "project not found", None

@@ -477,7 +477,7 @@ DIAGRAM_JS = r"""
       bar.innerHTML = `
         <div class="title">${project.title}</div>
         <div class="meta">
-          ${project.accountable_contact_name}<br />
+          ${project.budget_id || project.id}<br />
           ${project.start_date} → ${project.end_date}<br />
           Capex ${formatMoney(project.capex_gbp)} · Opex ${formatMoney(project.opex_gbp)}<br />
           ${project.description}

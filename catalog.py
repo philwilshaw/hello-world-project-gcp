@@ -11,7 +11,9 @@ from flask import Blueprint, abort, jsonify, request
 
 from db import (
     ARCHITECTURE_RELATIONSHIPS,
+    BUDGET_RELATIONSHIPS,
     RISK_RELATIONSHIPS,
+    RUN_CONTRACT_RELATIONSHIPS,
     add_link,
     fetch_all_architecture,
     fetch_all_projects,
@@ -275,7 +277,7 @@ def projects_list():
               <td>{_esc(p['id'])}</td>
               <td><a class="title-link" href="/projects/{_esc(p['id'])}">{_esc(p['title'])}</a></td>
               <td>{_esc(p['description'])}</td>
-              <td>{_esc(p['accountable_contact_name'])}</td>
+              <td>{_esc(p.get('budget_status', '—'))}</td>
               <td>{_esc(p['start_date'])}</td>
               <td>{_esc(p['end_date'])}</td>
               <td><span class="rag {_esc(p['rag_status'])}">{_esc(p['rag_status'])}</span></td>
@@ -290,7 +292,7 @@ def projects_list():
         active="Projects",
         table_head="""
           <th>ID</th><th>Title</th><th>Description</th>
-          <th>Accountable contact</th><th>Start</th><th>End</th>
+          <th>Budget status</th><th>Start</th><th>End</th>
           <th>RAG</th><th>Capex</th><th>Opex</th>
         """,
         table_body="".join(body_rows)
@@ -311,7 +313,8 @@ def risks_list():
               <td>{_esc(r['description'])}</td>
               <td>{_esc(r['impact'])}</td>
               <td>{_esc(r['proximity'])}</td>
-              <td>{_esc(r['value'])}</td>
+              <td>{_esc(r.get('risk_score', ''))}</td>
+              <td>{_esc(r.get('status', ''))}</td>
             </tr>
             """
         )
@@ -321,10 +324,10 @@ def risks_list():
         active="Risks",
         table_head="""
           <th>ID</th><th>Title</th><th>Description</th>
-          <th>Impact</th><th>Proximity</th><th>Value</th>
+          <th>Impact band</th><th>Proximity</th><th>Score</th><th>Status</th>
         """,
         table_body="".join(body_rows)
-        or '<tr><td colspan="6" class="empty">No risks</td></tr>',
+        or '<tr><td colspan="7" class="empty">No risks</td></tr>',
     )
 
 
@@ -341,8 +344,9 @@ def architecture_list():
               <td>{_esc(a['description'])}</td>
               <td>{_esc(a['component_type'])}</td>
               <td>{_esc(a['owner'])}</td>
-              <td>{_esc(a['capability'])}</td>
+              <td>{_esc(a.get('capability', ''))}</td>
               <td>{_esc(a['outlook'])}</td>
+              <td>{_esc(a.get('deployment_state', ''))}</td>
             </tr>
             """
         )
@@ -351,11 +355,11 @@ def architecture_list():
         subtitle="All architecture components from the architecture_components table",
         active="Architecture",
         table_head="""
-          <th>ID</th><th>Title</th><th>Description</th>
-          <th>Type</th><th>Owner</th><th>Capability</th><th>Outlook</th>
+          <th>ID</th><th>Name</th><th>Description</th>
+          <th>Host type</th><th>Architect</th><th>Capability</th><th>Outlook</th><th>State</th>
         """,
         table_body="".join(body_rows)
-        or '<tr><td colspan="7" class="empty">No architecture components</td></tr>',
+        or '<tr><td colspan="8" class="empty">No architecture components</td></tr>',
     )
 
 
@@ -404,14 +408,18 @@ def project_detail(project_id):
       <dt>ID</dt><dd>{_esc(p['id'])}</dd>
       <dt>Title</dt><dd>{_esc(p['title'])}</dd>
       <dt>Description</dt><dd>{_esc(p['description'])}</dd>
-      <dt>Accountable contact</dt><dd>{_esc(p['accountable_contact_name'])}</dd>
+      <dt>Budget ID</dt><dd>{_esc(p['budget_id'])}</dd>
+      <dt>Budget status</dt><dd>{_esc(p.get('budget_status', '—'))}</dd>
       <dt>Sub-zone</dt><dd>{_esc(p.get('sub_zone_name', '—'))}</dd>
       <dt>Zone</dt><dd>{_esc(p.get('zone_name', '—'))}</dd>
-      <dt>Start date</dt><dd>{_esc(p['start_date'])}</dd>
-      <dt>End date</dt><dd>{_esc(p['end_date'])}</dd>
+      <dt>2027 priority</dt><dd>{_esc(p.get('priority_2027') or '—')}</dd>
+      <dt>Timeline start</dt><dd>{_esc(p['start_date'])}</dd>
+      <dt>Timeline end</dt><dd>{_esc(p['end_date'])}</dd>
       <dt>RAG status</dt><dd><span class="rag {_esc(p['rag_status'])}">{_esc(p['rag_status'])}</span></dd>
       <dt>Capex (GBP)</dt><dd>{_esc(_money(p['capex_gbp']))}</dd>
       <dt>Opex (GBP)</dt><dd>{_esc(_money(p['opex_gbp']))}</dd>
+      <dt>Outcomes</dt><dd><pre class="field-block">{_esc(p.get('outcomes', ''))}</pre></dd>
+      <dt>Delivery approach</dt><dd><pre class="field-block">{_esc(p.get('delivery_approach', ''))}</pre></dd>
     """
 
     linked = f"""
@@ -484,9 +492,15 @@ def risk_detail(risk_id):
       <dt>Description</dt><dd>{_esc(r['description'])}</dd>
       <dt>Sub-zone</dt><dd>{_esc(r.get('sub_zone_name', '—'))}</dd>
       <dt>Zone</dt><dd>{_esc(r.get('zone_name', '—'))}</dd>
-      <dt>Impact</dt><dd>{_esc(r['impact'])}</dd>
-      <dt>Proximity</dt><dd>{_esc(r['proximity'])}</dd>
-      <dt>Value</dt><dd>{_esc(r['value'])}</dd>
+      <dt>Impact band</dt><dd>{_esc(r['impact'])}</dd>
+      <dt>Proximity band</dt><dd>{_esc(r['proximity'])}</dd>
+      <dt>Risk score</dt><dd>{_esc(r.get('risk_score', ''))}</dd>
+      <dt>Status</dt><dd>{_esc(r.get('status', ''))}</dd>
+      <dt>Risk response</dt><dd>{_esc(r.get('risk_response', ''))}</dd>
+      <dt>Category</dt><dd>{_esc(r.get('category', ''))}</dd>
+      <dt>Risk owner</dt><dd>{_esc(r.get('risk_owner', ''))}</dd>
+      <dt>Likelihood</dt><dd>{_esc(r.get('current_likelihood', ''))}</dd>
+      <dt>Date created</dt><dd>{_esc(r.get('date_created', ''))}</dd>
     """
 
     linked = f"""
@@ -546,17 +560,20 @@ def architecture_detail(architecture_id):
 
     fields = f"""
       <dt>ID</dt><dd>{_esc(a['id'])}</dd>
-      <dt>Title</dt><dd>{_esc(a['title'])}</dd>
+      <dt>Name</dt><dd>{_esc(a['title'])}</dd>
       <dt>Description</dt><dd>{_esc(a['description'])}</dd>
-      <dt>Component type</dt><dd>{_esc(a['component_type'])}</dd>
-      <dt>Owner</dt><dd>{_esc(a['owner'])}</dd>
+      <dt>Host type</dt><dd>{_esc(a['component_type'])}</dd>
+      <dt>Architect</dt><dd>{_esc(a['owner'])}</dd>
       <dt>Sub-zone</dt><dd>{_esc(a.get('sub_zone_name', '—'))}</dd>
       <dt>Zone</dt><dd>{_esc(a.get('zone_name', '—'))}</dd>
-      <dt>Capability</dt><dd>{_esc(a['capability'])}</dd>
-      <dt>Arch outlook</dt><dd>{_esc(a['outlook'])}</dd>
-      <dt>Implemented</dt><dd>{_esc(a.get('implemented_date') or '—')}</dd>
-      <dt>Go live</dt><dd>{_esc(a.get('go_live_date') or '—')}</dd>
-      <dt>Decommissioned</dt><dd>{_esc(a.get('decommissioned_date') or '—')}</dd>
+      <dt>Capability</dt><dd>{_esc(a.get('capability', ''))}</dd>
+      <dt>Architecture outlook</dt><dd>{_esc(a['outlook'])}</dd>
+      <dt>Deployment state</dt><dd>{_esc(a.get('deployment_state', ''))}</dd>
+      <dt>Deployment date</dt><dd>{_esc(a.get('deployment_date') or '—')}</dd>
+      <dt>Decommission date</dt><dd>{_esc(a.get('decommission_date') or '—')}</dd>
+      <dt>In scope of ESA</dt><dd>{_esc(a.get('in_scope_of_esa', ''))}</dd>
+      <dt>Class of service</dt><dd>{_esc(a.get('class_of_service', ''))}</dd>
+      <dt>Vendor</dt><dd>{_esc(a.get('vendor', ''))}</dd>
     """
 
     linked = f"""

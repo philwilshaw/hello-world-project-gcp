@@ -12,6 +12,9 @@ from ui import esc, render_page
 architecture_views_bp = Blueprint("architecture_views", __name__)
 
 OUTLOOK_COLORS = {
+    "Retain": "#3cb371",
+    "Upgrade": "#f0a202",
+    "Decommission": "#e85d4c",
     "to be implemented": "#7eb6ff",
     "continue": "#3cb371",
     "to be decommissioned": "#e85d4c",

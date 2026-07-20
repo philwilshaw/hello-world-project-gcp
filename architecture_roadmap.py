@@ -181,11 +181,9 @@ EXTRA_CSS = r"""
 
 ROADMAP_BODY = """
   <div class="legend">
-    <span><i class="swatch" style="background:var(--outlook-to-be-implemented)"></i>to be implemented</span>
-    <span><i class="swatch" style="background:var(--outlook-continue)"></i>continue</span>
-    <span><i class="swatch" style="background:var(--outlook-to-be-decommissioned)"></i>to be decommissioned</span>
-    <span><i class="swatch" style="background:var(--outlook-upgrade)"></i>upgrade</span>
-    <span><i class="swatch" style="background:var(--outlook-decommissioned)"></i>decommissioned</span>
+    <span><i class="swatch" style="background:var(--outlook-continue)"></i>Retain</span>
+    <span><i class="swatch" style="background:var(--outlook-upgrade)"></i>Upgrade</span>
+    <span><i class="swatch" style="background:var(--outlook-to-be-decommissioned)"></i>Decommission</span>
     <span><span class="star-legend">★</span> project go-live impact</span>
   </div>
 
@@ -203,6 +201,9 @@ ROADMAP_BODY = """
 ROADMAP_JS = r"""
 <script>
   const OUTLOOK_COLORS = {
+    "Retain": "#3cb371",
+    "Upgrade": "#f0a202",
+    "Decommission": "#e85d4c",
     "to be implemented": "#7eb6ff",
     "continue": "#3cb371",
     "to be decommissioned": "#e85d4c",
