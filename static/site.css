@@ -176,9 +176,24 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-start;
-  gap: 0.75rem;
+  align-items: flex-start;
+  gap: 1.35rem;
   font-size: 0.85rem;
-  margin-top: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.site-nav a.nav-top,
+.site-nav .nav-top {
+  color: var(--accent);
+}
+
+.site-nav a.nav-top:hover {
+  text-decoration: underline;
+}
+
+.site-nav .nav-top.active {
+  color: var(--text);
+  font-weight: 650;
 }
 
 .site-nav a {
@@ -192,6 +207,65 @@ a:hover {
 .site-nav .active {
   color: var(--text);
   font-weight: 650;
+}
+
+.nav-dropdown {
+  position: relative;
+}
+
+.nav-dropdown-label {
+  cursor: pointer;
+  color: var(--accent);
+  list-style: none;
+  user-select: none;
+}
+
+.nav-dropdown-label::-webkit-details-marker {
+  display: none;
+}
+
+.nav-dropdown-label::after {
+  content: " ▾";
+  font-size: 0.72em;
+  opacity: 0.85;
+}
+
+.nav-dropdown[open] .nav-dropdown-label,
+.nav-dropdown-label.active {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.nav-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  min-width: 12rem;
+  padding: 0.45rem 0;
+  background: #1a2330;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.nav-dropdown-menu a,
+.nav-dropdown-menu .active {
+  display: block;
+  padding: 0.4rem 0.9rem;
+  white-space: nowrap;
+}
+
+.nav-dropdown-menu a:hover {
+  background: rgba(125, 211, 192, 0.08);
+  text-decoration: none;
+}
+
+.nav-dropdown-menu .active {
+  background: rgba(125, 211, 192, 0.12);
 }
 
 .site-main {

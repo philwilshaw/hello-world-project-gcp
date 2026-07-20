@@ -176,7 +176,7 @@ EXTRA_CSS = r"""
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 2px;
+  top: 44px;
   height: 22px;
   z-index: 3;
 }

@@ -9,21 +9,71 @@ from datetime import datetime
 
 from flask import render_template_string
 
-NAV_ITEMS = [
+NAV_TOP_LEVEL = [
     ("/", "Home"),
     ("/zones", "Zones"),
-    ("/diagram", "Project Roadmap"),
-    ("/cost-dashboard", "Cost Dashboard"),
-    ("/projects", "Project List"),
-    ("/risks", "Risk List"),
-    ("/architecture", "Architecture List"),
-    ("/budgets", "Budget List"),
-    ("/run-contracts", "Run Contract List"),
-    ("/run-contracts/roadmap", "Run Contract Roadmap"),
-    ("/architecture/diagram", "Architecture Diagram"),
-    ("/architecture/capabilities", "Architecture Model"),
-    ("/architecture/roadmap", "Architecture Roadmap"),
 ]
+
+NAV_DROPDOWNS = [
+    {
+        "label": "Projects",
+        "items": [
+            ("/projects", "Project List"),
+            ("/diagram", "Project Roadmap"),
+        ],
+    },
+    {
+        "label": "Architecture",
+        "items": [
+            ("/architecture", "Architecture List"),
+            ("/architecture/diagram", "Architecture Diagram"),
+            ("/architecture/capabilities", "Architecture Model"),
+        ],
+    },
+    {
+        "label": "Risks",
+        "items": [
+            ("/risks", "Risk List"),
+        ],
+    },
+    {
+        "label": "Finance",
+        "items": [
+            ("/cost-dashboard", "Cost Dashboard"),
+            ("/budgets", "Budget List"),
+            ("/run-contracts", "Run Contract List"),
+            ("/run-contracts/roadmap", "Run Contract Roadmap"),
+        ],
+    },
+    {
+        "label": "Roadmaps",
+        "items": [
+            ("/diagram", "Project Roadmap"),
+            ("/architecture/roadmap", "Architecture Roadmap"),
+            ("/run-contracts/roadmap", "Run Contract Roadmap"),
+        ],
+    },
+]
+
+
+def all_nav_links() -> list[tuple[str, str]]:
+    """Flat link list for sitemap and other consumers (deduped by href)."""
+    seen: set[str] = set()
+    links: list[tuple[str, str]] = []
+    for href, label in NAV_TOP_LEVEL:
+        if href not in seen:
+            seen.add(href)
+            links.append((href, label))
+    for group in NAV_DROPDOWNS:
+        for href, label in group["items"]:
+            if href not in seen:
+                seen.add(href)
+                links.append((href, label))
+    return links
+
+
+# Back-compat alias used by sitemap.
+NAV_ITEMS = all_nav_links()
 
 
 def esc(value) -> str:
@@ -32,11 +82,33 @@ def esc(value) -> str:
 
 def render_nav(active: str | None = None) -> str:
     parts = []
-    for href, label in NAV_ITEMS:
-        if label.lower() == (active or "").lower():
-            parts.append(f'<span class="active">{esc(label)}</span>')
+    active_lower = (active or "").lower()
+
+    for href, label in NAV_TOP_LEVEL:
+        if label.lower() == active_lower:
+            parts.append(f'<span class="nav-top active">{esc(label)}</span>')
         else:
-            parts.append(f'<a href="{esc(href)}">{esc(label)}</a>')
+            parts.append(f'<a class="nav-top" href="{esc(href)}">{esc(label)}</a>')
+
+    for group in NAV_DROPDOWNS:
+        menu_parts = []
+        group_active = False
+        for href, label in group["items"]:
+            if label.lower() == active_lower:
+                menu_parts.append(f'<span class="active">{esc(label)}</span>')
+                group_active = True
+            else:
+                menu_parts.append(f'<a href="{esc(href)}">{esc(label)}</a>')
+
+        open_attr = " open" if group_active else ""
+        summary_class = ' class="nav-dropdown-label active"' if group_active else ' class="nav-dropdown-label"'
+        parts.append(
+            f'<details class="nav-dropdown"{open_attr}>'
+            f'<summary{summary_class}>{esc(group["label"])}</summary>'
+            f'<div class="nav-dropdown-menu">{"".join(menu_parts)}</div>'
+            f"</details>"
+        )
+
     return "\n".join(parts)
 
 
@@ -76,6 +148,19 @@ def render_footer() -> str:
 """
 
 
+NAV_JS = """
+<script>
+  document.querySelectorAll(".nav-dropdown").forEach((dropdown) => {
+    dropdown.addEventListener("toggle", () => {
+      if (!dropdown.open) return;
+      document.querySelectorAll(".nav-dropdown").forEach((other) => {
+        if (other !== dropdown) other.open = false;
+      });
+    });
+  });
+</script>
+"""
+
 SHELL = """
 <!DOCTYPE html>
 <html lang="en">
@@ -94,6 +179,7 @@ SHELL = """
     {{ body|safe }}
     {{ footer|safe }}
   </div>
+  {{ nav_js|safe }}
   {% if extra_js %}
   {{ extra_js|safe }}
   {% endif %}
@@ -128,6 +214,7 @@ def render_page(
         header=header,
         body=wrapped,
         footer=footer,
+        nav_js=NAV_JS,
         extra_css=extra_css,
         extra_js=extra_js,
     )
