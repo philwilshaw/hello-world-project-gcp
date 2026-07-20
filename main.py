@@ -29,9 +29,254 @@ init_db()
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "local")
 
+HOME_CARDS = [
+    {
+        "href": "/zones",
+        "title": "Zones",
+        "blurb": "Explore the L1 / L2 / L3 operating hierarchy and zone owners.",
+        "image": "/static/home/zones.svg",
+        "theme": "zones",
+    },
+    {
+        "href": "/projects",
+        "title": "Project List",
+        "blurb": "Browse every project with cost, dates, and RAG status.",
+        "image": "/static/home/project-list.svg",
+        "theme": "projects",
+    },
+    {
+        "href": "/diagram",
+        "title": "Project Roadmap",
+        "blurb": "See project timelines grouped by zone and sub-zone.",
+        "image": "/static/home/project-roadmap.svg",
+        "theme": "projects",
+    },
+    {
+        "href": "/architecture",
+        "title": "Architecture List",
+        "blurb": "Review architecture components and their outlook.",
+        "image": "/static/home/architecture-list.svg",
+        "theme": "architecture",
+    },
+    {
+        "href": "/architecture/diagram",
+        "title": "Architecture Diagram",
+        "blurb": "Trace relationships between architecture elements.",
+        "image": "/static/home/architecture-diagram.svg",
+        "theme": "architecture",
+    },
+    {
+        "href": "/architecture/capabilities",
+        "title": "Architecture Model",
+        "blurb": "Navigate Zone → SubZone → Capability structure.",
+        "image": "/static/home/architecture-model.svg",
+        "theme": "architecture",
+    },
+    {
+        "href": "/architecture/roadmap",
+        "title": "Architecture Roadmap",
+        "blurb": "Follow component lifespans and project go-live impacts.",
+        "image": "/static/home/architecture-roadmap.svg",
+        "theme": "architecture",
+    },
+    {
+        "href": "/risks",
+        "title": "Risk List",
+        "blurb": "Inspect corporate risks, scores, and responses.",
+        "image": "/static/home/risk-list.svg",
+        "theme": "risks",
+    },
+    {
+        "href": "/cost-dashboard",
+        "title": "Cost Dashboard",
+        "blurb": "Compare Capex and Opex spend by zone and year.",
+        "image": "/static/home/cost-dashboard.svg",
+        "theme": "finance",
+    },
+    {
+        "href": "/budgets",
+        "title": "Budget List",
+        "blurb": "Open budget lines that fund projects and contracts.",
+        "image": "/static/home/budget-list.svg",
+        "theme": "finance",
+    },
+    {
+        "href": "/run-contracts",
+        "title": "Run Contract List",
+        "blurb": "Browse vendor run contracts and renewal dates.",
+        "image": "/static/home/run-contract-list.svg",
+        "theme": "finance",
+    },
+    {
+        "href": "/run-contracts/roadmap",
+        "title": "Run Contract Roadmap",
+        "blurb": "Visualise contract terms, PO renewals, and next actions.",
+        "image": "/static/home/run-contract-roadmap.svg",
+        "theme": "finance",
+    },
+    {
+        "href": "/about",
+        "title": "About this site",
+        "blurb": "How this demo was built, what was learned, and what is next.",
+        "image": "/static/home/about.svg",
+        "theme": "about",
+    },
+]
+
+HOME_CSS = """
+.home-intro {
+  max-width: 46rem;
+  margin: 0 0 1.75rem;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+.home-intro strong {
+  color: var(--text);
+  font-weight: 650;
+}
+.home-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.15rem;
+}
+@media (max-width: 1100px) {
+  .home-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .home-card-grid { grid-template-columns: 1fr; }
+}
+.home-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.02);
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+.home-card:hover {
+  transform: translateY(-2px);
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.04);
+}
+.home-card-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: #10151c;
+}
+.home-card-body {
+  padding: 0.95rem 1rem 1.1rem;
+  border-top: 1px solid var(--line);
+}
+.home-card-kicker {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+.home-card-title {
+  font-size: 1.08rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+  color: var(--text);
+}
+.home-card-blurb {
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.home-card.theme-zones {
+  border-color: rgba(125, 211, 192, 0.35);
+}
+.home-card.theme-zones .home-card-kicker { color: #7dd3c0; }
+.home-card.theme-zones:hover { border-color: rgba(125, 211, 192, 0.65); }
+.home-card.theme-projects {
+  border-color: rgba(91, 141, 239, 0.35);
+}
+.home-card.theme-projects .home-card-kicker { color: #5b8def; }
+.home-card.theme-projects:hover { border-color: rgba(91, 141, 239, 0.65); }
+.home-card.theme-architecture {
+  border-color: rgba(240, 162, 2, 0.35);
+}
+.home-card.theme-architecture .home-card-kicker { color: #f0a202; }
+.home-card.theme-architecture:hover { border-color: rgba(240, 162, 2, 0.65); }
+.home-card.theme-risks {
+  border-color: rgba(232, 93, 76, 0.35);
+}
+.home-card.theme-risks .home-card-kicker { color: #e85d4c; }
+.home-card.theme-risks:hover { border-color: rgba(232, 93, 76, 0.65); }
+.home-card.theme-finance {
+  border-color: rgba(60, 179, 113, 0.35);
+}
+.home-card.theme-finance .home-card-kicker { color: #3cb371; }
+.home-card.theme-finance:hover { border-color: rgba(60, 179, 113, 0.65); }
+.home-card.theme-about {
+  border-color: rgba(143, 160, 181, 0.35);
+}
+.home-card.theme-about .home-card-kicker { color: #8fa0b5; }
+.home-card.theme-about:hover { border-color: rgba(143, 160, 181, 0.65); }
+"""
+
+THEME_LABELS = {
+    "zones": "Zones",
+    "projects": "Projects",
+    "architecture": "Architecture",
+    "risks": "Risks",
+    "finance": "Finance",
+    "about": "About",
+}
+
+
+def _home_cards_html() -> str:
+    cards = []
+    for card in HOME_CARDS:
+        theme = card["theme"]
+        cards.append(
+            f"""
+            <a class="home-card theme-{esc(theme)}" href="{esc(card['href'])}">
+              <img class="home-card-image" src="{esc(card['image'])}" alt="" />
+              <div class="home-card-body">
+                <div class="home-card-kicker">{esc(THEME_LABELS.get(theme, theme))}</div>
+                <div class="home-card-title">{esc(card['title'])}</div>
+                <p class="home-card-blurb">{esc(card['blurb'])}</p>
+              </div>
+            </a>
+            """
+        )
+    return "\n".join(cards)
+
 
 @app.route("/")
 def hello():
+    body = f"""
+<p class="home-intro">
+  <strong>PhilTech portfolio demo</strong> — a cloud-hosted sample of how technology
+  delivery, architecture, risk, and run finance can sit together. Browse zones,
+  projects, architecture, risks, budgets, and run contracts through linked catalogs,
+  roadmaps, and a cost dashboard. All data is dummy sample content hosted on personal GCP.
+</p>
+<div class="home-card-grid">
+  {_home_cards_html()}
+</div>
+"""
+    return render_page(
+        title="PhilTech portfolio demo",
+        subtitle="Zones, projects, architecture, risk, and finance — linked in one place",
+        active="Home",
+        body=body,
+        extra_css=HOME_CSS,
+        wide=True,
+    )
+
+
+@app.route("/about")
+def about_page():
     status = get_db_status()
     writes_enabled = status["writes_enabled"]
     writes_label = (
@@ -185,7 +430,7 @@ def hello():
 <li>Added a PhilTech logo in the header and increased H1 / H2 sizes across the site</li>
 <li>Made page subtitles render as H2 and renamed nav / page titles for clearer labels</li>
 <li>Centered all pages in a 1400px max-width container without changing inner content alignment</li>
-<li>Kept environment and database status messaging on Home only</li>
+<li>Kept environment and database status messaging on the About page</li>
 <li>Expanded the site map to include budgets, run contracts, and the newer pages</li>
 </ul>
 
@@ -285,9 +530,9 @@ I started with no experience and now I can:
 """
 
     return render_page(
-        title="My First Cloud Deployment Project",
-        subtitle="Welcome to the demo site",
-        active="Home",
+        title="About this site",
+        subtitle="Build story, database status, and what comes next",
+        active="About this site",
         body=body,
     )
 

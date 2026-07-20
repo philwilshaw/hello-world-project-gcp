@@ -56,12 +56,16 @@ NAV_DROPDOWNS = [
     },
 ]
 
+NAV_TRAILING = [
+    ("/about", "About this site"),
+]
+
 
 def all_nav_links() -> list[tuple[str, str]]:
     """Flat link list for sitemap and other consumers (deduped by href)."""
     seen: set[str] = set()
     links: list[tuple[str, str]] = []
-    for href, label in NAV_TOP_LEVEL:
+    for href, label in [*NAV_TOP_LEVEL, *NAV_TRAILING]:
         if href not in seen:
             seen.add(href)
             links.append((href, label))
@@ -81,15 +85,18 @@ def esc(value) -> str:
     return html.escape(str(value), quote=True)
 
 
+def _nav_link(href: str, label: str, active_lower: str, *, css_class: str = "nav-top") -> str:
+    if label.lower() == active_lower:
+        return f'<span class="{css_class} active">{esc(label)}</span>'
+    return f'<a class="{css_class}" href="{esc(href)}">{esc(label)}</a>'
+
+
 def render_nav(active: str | None = None) -> str:
     parts = []
     active_lower = (active or "").lower()
 
     for href, label in NAV_TOP_LEVEL:
-        if label.lower() == active_lower:
-            parts.append(f'<span class="nav-top active">{esc(label)}</span>')
-        else:
-            parts.append(f'<a class="nav-top" href="{esc(href)}">{esc(label)}</a>')
+        parts.append(_nav_link(href, label, active_lower))
 
     for group in NAV_DROPDOWNS:
         menu_parts = []
@@ -112,6 +119,9 @@ def render_nav(active: str | None = None) -> str:
             f'<div class="nav-dropdown-menu">{"".join(menu_parts)}</div>'
             f"</details>"
         )
+
+    for href, label in NAV_TRAILING:
+        parts.append(_nav_link(href, label, active_lower))
 
     return "\n".join(parts)
 
