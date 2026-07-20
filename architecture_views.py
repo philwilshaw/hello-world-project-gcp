@@ -30,72 +30,134 @@ DIAGRAM_EXTRA_CSS = """
 """
 
 CAPABILITIES_EXTRA_CSS = """
-.zone-block { margin-bottom: 2.25rem; }
-.zone-heading {
-  font-size: 1.65rem;
-  font-weight: 700;
-  margin: 0 0 0.85rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 2px solid var(--accent);
-}
-.subzone-block { margin: 0 0 1.5rem 0.35rem; }
-.subzone-heading {
-  font-size: 1.35rem;
-  font-weight: 650;
-  margin: 0 0 0.7rem;
-  color: var(--text);
-}
-.capability { margin: 0 0 1.25rem 0.35rem; }
-.capability-heading {
-  font-size: 1.1rem;
-  font-weight: 650;
-  margin: 0 0 0.65rem;
-  padding-bottom: 0.3rem;
-  border-bottom: 1px solid var(--line);
+.model-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.35rem;
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.85rem;
   color: var(--muted);
 }
-.grid {
+.model-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  user-select: none;
+}
+.model-controls input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.model-legend {
+  padding: 0 0 0.85rem;
+}
+.zone-block { margin-bottom: 1.35rem; }
+.zone-heading {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 0 0.55rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 2px solid var(--accent);
+}
+.subzone-block { margin: 0 0 0.95rem; }
+.subzone-heading {
+  font-size: 1.05rem;
+  font-weight: 650;
+  margin: 0 0 0.45rem;
+  color: var(--text);
+}
+.capability-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0.85rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem 0.75rem;
+  align-items: start;
+}
+.capability {
+  margin: 0;
+  min-width: 0;
+}
+.capability-heading {
+  font-size: 0.78rem;
+  font-weight: 650;
+  margin: 0 0 0.4rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  line-height: 1.25;
+}
+.card-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 .card {
   display: block;
-  border-radius: 10px;
-  padding: 0.85rem 0.9rem;
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
   border: 1px solid var(--line);
   color: var(--text);
-  transition: transform 140ms ease, border-color 140ms ease;
+  transition: transform 140ms ease, border-color 140ms ease, padding 140ms ease;
 }
 .card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   text-decoration: none;
 }
 .card-title {
   font-weight: 700;
-  font-size: 0.98rem;
-  margin-bottom: 0.25rem;
+  font-size: 0.88rem;
+  line-height: 1.2;
+  margin-bottom: 0.15rem;
 }
-.card-id, .card-owner {
+.card-id {
   color: var(--muted);
-  font-size: 0.72rem;
-  margin-bottom: 0.35rem;
+  font-size: 0.68rem;
+  margin-bottom: 0.25rem;
 }
 .card-outlook {
   display: inline-block;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 700;
   text-transform: lowercase;
-  padding: 0.15rem 0.45rem;
+  padding: 0.1rem 0.4rem;
   border-radius: 999px;
   background: var(--outlook);
   color: #10151c;
-  margin-bottom: 0.45rem;
+  margin-bottom: 0;
 }
 .card-desc {
-  font-size: 0.8rem;
-  line-height: 1.35;
+  font-size: 0.74rem;
+  line-height: 1.3;
   color: #d7dee8;
+  margin-top: 0.35rem;
+}
+.card-owner {
+  color: var(--muted);
+  font-size: 0.68rem;
+  margin-top: 0.3rem;
+}
+.model-root.hide-desc .card-desc {
+  display: none;
+}
+.model-root.hide-owner .card-owner {
+  display: none;
+}
+@media (max-width: 980px) {
+  .capability-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .capability-grid {
+    grid-template-columns: 1fr;
+  }
 }
 """
 
@@ -256,8 +318,8 @@ def architecture_capabilities_page():
                 capability_sections.append(
                     f"""
                     <section class="capability">
-                      <h4 class="capability-heading">Capability: {_esc(capability['name'])}</h4>
-                      <div class="grid">{"".join(cards)}</div>
+                      <h4 class="capability-heading">{_esc(capability['name'])}</h4>
+                      <div class="card-stack">{"".join(cards)}</div>
                     </section>
                     """
                 )
@@ -265,7 +327,7 @@ def architecture_capabilities_page():
                 f"""
                 <section class="subzone-block">
                   <h3 class="subzone-heading">SubZone: {_esc(sub_zone['sub_zone_name'])}</h3>
-                  {"".join(capability_sections)}
+                  <div class="capability-grid">{"".join(capability_sections)}</div>
                 </section>
                 """
             )
@@ -279,8 +341,33 @@ def architecture_capabilities_page():
         )
 
     body = f"""
-  <div class="legend">{_legend_html()}</div>
-  {"".join(zone_sections) or "<p style='padding:1.5rem;color:var(--muted)'>No architecture components</p>"}
+  <div id="architecture-model" class="model-root">
+    <div class="model-controls">
+      <label><input type="checkbox" id="toggle-desc" checked /> Show description</label>
+      <label><input type="checkbox" id="toggle-owner" checked /> Show owner</label>
+    </div>
+    <div class="legend model-legend">{_legend_html()}</div>
+    {"".join(zone_sections) or "<p style='color:var(--muted)'>No architecture components</p>"}
+  </div>
+"""
+    extra_js = """
+<script>
+  (function () {
+    const root = document.getElementById("architecture-model");
+    if (!root) return;
+    const desc = document.getElementById("toggle-desc");
+    const owner = document.getElementById("toggle-owner");
+
+    function apply() {
+      root.classList.toggle("hide-desc", !desc.checked);
+      root.classList.toggle("hide-owner", !owner.checked);
+    }
+
+    desc.addEventListener("change", apply);
+    owner.addEventListener("change", apply);
+    apply();
+  })();
+</script>
 """
     return render_page(
         title="Architecture Model",
@@ -288,4 +375,5 @@ def architecture_capabilities_page():
         active="Architecture Model",
         body=body,
         extra_css=CAPABILITIES_EXTRA_CSS,
+        extra_js=extra_js,
     )
