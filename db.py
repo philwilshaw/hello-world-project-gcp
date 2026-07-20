@@ -915,22 +915,197 @@ def fetch_all_architecture():
         ]
 
 
+def _enrich_budget(budget):
+    row = dict(budget)
+    row["id"] = row["line_id"]
+    return row
+
+
+def _enrich_run_contract(contract):
+    row = dict(contract)
+    row["id"] = row["fin_id"]
+    row["title"] = row["contract_name"]
+    return row
+
+
+def _projects_linked_to(conn, linked_type, linked_id):
+    """Projects with a direct edge to the given entity."""
+    budgets = _budgets_by_id(conn)
+    projects = []
+    for row in conn.execute(
+        """
+        SELECT p.*, e.id AS edge_id, e.relationship
+        FROM edges e
+        JOIN projects p ON p.line_id = e.project_id
+        WHERE e.linked_type = ? AND e.linked_id = ?
+        ORDER BY p.line_id
+        """,
+        (linked_type, linked_id),
+    ):
+        project = _enrich_project(dict(row), budgets.get(row["budget_id"]))
+        project["edge_id"] = row["edge_id"]
+        project["relationship"] = row["relationship"]
+        projects.append(project)
+    return projects
+
+
+def _cross_links_via_projects(conn, project_ids, *, exclude_type=None, exclude_id=None):
+    """
+    Collect other entities linked to the given projects (sibling links).
+
+    Items keep edge_id for remove, plus via_project_id / via_project_title.
+    """
+    if not project_ids:
+        return {
+            "linked_risks": [],
+            "linked_architecture": [],
+            "linked_budgets": [],
+            "linked_run_contracts": [],
+        }
+
+    placeholders = ",".join("?" for _ in project_ids)
+    params = tuple(project_ids)
+    caps = _capabilities_by_id(conn)
+    project_titles = {
+        row["line_id"]: row["title"]
+        for row in conn.execute(
+            f"SELECT line_id, title FROM projects WHERE line_id IN ({placeholders})",
+            params,
+        )
+    }
+
+    risks = []
+    for row in conn.execute(
+        f"""
+        SELECT r.*, e.id AS edge_id, e.relationship, e.project_id AS via_project_id
+        FROM edges e
+        JOIN risks r ON r.id = e.linked_id
+        WHERE e.linked_type = 'risk' AND e.project_id IN ({placeholders})
+        ORDER BY r.id
+        """,
+        params,
+    ):
+        if exclude_type == "risk" and row["id"] == exclude_id:
+            continue
+        item = _enrich_risk(dict(row))
+        item["edge_id"] = row["edge_id"]
+        item["relationship"] = row["relationship"]
+        item["via_project_id"] = row["via_project_id"]
+        item["via_project_title"] = project_titles.get(row["via_project_id"], "")
+        risks.append(item)
+
+    architecture = []
+    for row in conn.execute(
+        f"""
+        SELECT a.*, e.id AS edge_id, e.relationship, e.project_id AS via_project_id
+        FROM edges e
+        JOIN architecture_components a ON a.id = e.linked_id
+        WHERE e.linked_type = 'architecture' AND e.project_id IN ({placeholders})
+        ORDER BY a.id
+        """,
+        params,
+    ):
+        if exclude_type == "architecture" and row["id"] == exclude_id:
+            continue
+        item = _enrich_architecture(dict(row), caps.get(row["capability_id"]))
+        item["edge_id"] = row["edge_id"]
+        item["relationship"] = row["relationship"]
+        item["via_project_id"] = row["via_project_id"]
+        item["via_project_title"] = project_titles.get(row["via_project_id"], "")
+        architecture.append(item)
+
+    budgets = []
+    for row in conn.execute(
+        f"""
+        SELECT b.*, e.id AS edge_id, e.relationship, e.project_id AS via_project_id
+        FROM edges e
+        JOIN budgets b ON b.line_id = e.linked_id
+        WHERE e.linked_type = 'budget' AND e.project_id IN ({placeholders})
+        ORDER BY b.line_id
+        """,
+        params,
+    ):
+        if exclude_type == "budget" and row["line_id"] == exclude_id:
+            continue
+        item = _enrich_budget(dict(row))
+        item["edge_id"] = row["edge_id"]
+        item["relationship"] = row["relationship"]
+        item["via_project_id"] = row["via_project_id"]
+        item["via_project_title"] = project_titles.get(row["via_project_id"], "")
+        budgets.append(item)
+
+    run_contracts = []
+    for row in conn.execute(
+        f"""
+        SELECT rc.*, e.id AS edge_id, e.relationship, e.project_id AS via_project_id
+        FROM edges e
+        JOIN run_contracts rc ON rc.fin_id = e.linked_id
+        WHERE e.linked_type = 'run_contract' AND e.project_id IN ({placeholders})
+        ORDER BY rc.fin_id
+        """,
+        params,
+    ):
+        if exclude_type == "run_contract" and row["fin_id"] == exclude_id:
+            continue
+        item = _enrich_run_contract(dict(row))
+        item["edge_id"] = row["edge_id"]
+        item["relationship"] = row["relationship"]
+        item["via_project_id"] = row["via_project_id"]
+        item["via_project_title"] = project_titles.get(row["via_project_id"], "")
+        run_contracts.append(item)
+
+    return {
+        "linked_risks": risks,
+        "linked_architecture": architecture,
+        "linked_budgets": budgets,
+        "linked_run_contracts": run_contracts,
+    }
+
+
 def fetch_all_budgets():
     init_db()
     with get_connection() as conn:
-        return [
-            dict(row)
-            for row in conn.execute("SELECT * FROM budgets ORDER BY line_id")
-        ]
+        rows = []
+        for row in conn.execute(
+            """
+            SELECT
+                b.*,
+                z.name AS zone_name,
+                sz.name AS sub_zone_name
+            FROM budgets b
+            JOIN sub_zones sz ON sz.id = b.sub_zone_id
+            JOIN zones z ON z.id = sz.zone_id
+            ORDER BY b.line_id
+            """
+        ):
+            item = _enrich_budget(dict(row))
+            item["zone_name"] = row["zone_name"]
+            item["sub_zone_name"] = row["sub_zone_name"]
+            rows.append(item)
+        return rows
 
 
 def fetch_all_run_contracts():
     init_db()
     with get_connection() as conn:
-        return [
-            dict(row)
-            for row in conn.execute("SELECT * FROM run_contracts ORDER BY fin_id")
-        ]
+        rows = []
+        for row in conn.execute(
+            """
+            SELECT
+                rc.*,
+                z.name AS zone_name,
+                sz.name AS sub_zone_name
+            FROM run_contracts rc
+            JOIN sub_zones sz ON sz.id = rc.sub_zone_id
+            JOIN zones z ON z.id = sz.zone_id
+            ORDER BY rc.fin_id
+            """
+        ):
+            item = _enrich_run_contract(dict(row))
+            item["zone_name"] = row["zone_name"]
+            item["sub_zone_name"] = row["sub_zone_name"]
+            rows.append(item)
+        return rows
 
 
 def fetch_architecture_graph():
@@ -1220,7 +1395,11 @@ def fetch_project_detail(project_id):
             )
         ]
         linked_budgets = [
-            {**dict(row), "edge_id": row["edge_id"], "relationship": row["relationship"]}
+            {
+                **_enrich_budget(dict(row)),
+                "edge_id": row["edge_id"],
+                "relationship": row["relationship"],
+            }
             for row in conn.execute(
                 """
                 SELECT b.*, e.id AS edge_id, e.relationship
@@ -1232,8 +1411,19 @@ def fetch_project_detail(project_id):
                 (project_id,),
             )
         ]
+        # Include the project's owning budget (FK) if not already edge-linked.
+        if budget and budget["line_id"] not in {b["id"] for b in linked_budgets}:
+            owning = _enrich_budget(budget)
+            owning["edge_id"] = None
+            owning["relationship"] = "owns"
+            linked_budgets.insert(0, owning)
+
         linked_run_contracts = [
-            {**dict(row), "edge_id": row["edge_id"], "relationship": row["relationship"]}
+            {
+                **_enrich_run_contract(dict(row)),
+                "edge_id": row["edge_id"],
+                "relationship": row["relationship"],
+            }
             for row in conn.execute(
                 """
                 SELECT rc.*, e.id AS edge_id, e.relationship
@@ -1252,11 +1442,12 @@ def fetch_project_detail(project_id):
         "linked_architecture": linked_architecture,
         "linked_budgets": linked_budgets,
         "linked_run_contracts": linked_run_contracts,
+        "linked_projects": [],
     }
 
 
 def fetch_risk_detail(risk_id):
-    """Return one risk plus the projects linked to it."""
+    """Return one risk plus linked projects and cross-linked siblings."""
     init_db()
     with get_connection() as conn:
         risk = conn.execute(
@@ -1265,36 +1456,28 @@ def fetch_risk_detail(risk_id):
         if risk is None:
             return None
 
-        budgets = _budgets_by_id(conn)
         zone_ctx = fetch_sub_zone_context(conn, risk["sub_zone_id"])
         risk_dict = _enrich_risk(risk)
         if zone_ctx:
             risk_dict.update(zone_ctx)
 
-        linked_projects = []
-        for row in conn.execute(
-            """
-            SELECT p.*, e.id AS edge_id, e.relationship
-            FROM edges e
-            JOIN projects p ON p.line_id = e.project_id
-            WHERE e.linked_type = 'risk' AND e.linked_id = ?
-            ORDER BY p.line_id
-            """,
-            (risk_id,),
-        ):
-            project = _enrich_project(dict(row), budgets.get(row["budget_id"]))
-            project["edge_id"] = row["edge_id"]
-            project["relationship"] = row["relationship"]
-            linked_projects.append(project)
+        linked_projects = _projects_linked_to(conn, "risk", risk_id)
+        cross = _cross_links_via_projects(
+            conn,
+            [p["id"] for p in linked_projects],
+            exclude_type="risk",
+            exclude_id=risk_id,
+        )
 
     return {
         "risk": risk_dict,
         "linked_projects": linked_projects,
+        **cross,
     }
 
 
 def fetch_architecture_detail(architecture_id):
-    """Return one architecture component plus the projects linked to it."""
+    """Return one architecture component plus linked projects and siblings."""
     init_db()
     with get_connection() as conn:
         component = conn.execute(
@@ -1304,7 +1487,6 @@ def fetch_architecture_detail(architecture_id):
         if component is None:
             return None
 
-        budgets = _budgets_by_id(conn)
         caps = _capabilities_by_id(conn)
         zone_ctx = fetch_sub_zone_context(conn, component["sub_zone_id"])
         component_dict = _enrich_architecture(
@@ -1313,25 +1495,139 @@ def fetch_architecture_detail(architecture_id):
         if zone_ctx:
             component_dict.update(zone_ctx)
 
-        linked_projects = []
-        for row in conn.execute(
-            """
-            SELECT p.*, e.id AS edge_id, e.relationship
-            FROM edges e
-            JOIN projects p ON p.line_id = e.project_id
-            WHERE e.linked_type = 'architecture' AND e.linked_id = ?
-            ORDER BY p.line_id
-            """,
-            (architecture_id,),
-        ):
-            project = _enrich_project(dict(row), budgets.get(row["budget_id"]))
-            project["edge_id"] = row["edge_id"]
-            project["relationship"] = row["relationship"]
-            linked_projects.append(project)
+        linked_projects = _projects_linked_to(conn, "architecture", architecture_id)
+        cross = _cross_links_via_projects(
+            conn,
+            [p["id"] for p in linked_projects],
+            exclude_type="architecture",
+            exclude_id=architecture_id,
+        )
 
     return {
         "architecture": component_dict,
         "linked_projects": linked_projects,
+        **cross,
+    }
+
+
+def fetch_budget_detail(budget_line_id):
+    """Return one budget plus linked projects, FK run contracts, and siblings."""
+    init_db()
+    with get_connection() as conn:
+        budget = conn.execute(
+            "SELECT * FROM budgets WHERE line_id = ?", (budget_line_id,)
+        ).fetchone()
+        if budget is None:
+            return None
+
+        zone_ctx = fetch_sub_zone_context(conn, budget["sub_zone_id"])
+        budget_dict = _enrich_budget(budget)
+        if zone_ctx:
+            budget_dict.update(zone_ctx)
+
+        linked_projects = _projects_linked_to(conn, "budget", budget_line_id)
+
+        # Projects that own this budget via FK.
+        budgets_map = _budgets_by_id(conn)
+        owning_ids = {p["id"] for p in linked_projects}
+        for row in conn.execute(
+            "SELECT * FROM projects WHERE budget_id = ? ORDER BY line_id",
+            (budget["budget_id"],),
+        ):
+            if row["line_id"] in owning_ids:
+                continue
+            project = _enrich_project(dict(row), budgets_map.get(row["budget_id"]))
+            project["edge_id"] = None
+            project["relationship"] = "owns"
+            linked_projects.append(project)
+
+        # Run contracts that reference this budget ID.
+        linked_run_contracts = [
+            {
+                **_enrich_run_contract(dict(row)),
+                "edge_id": None,
+                "relationship": "funded by",
+            }
+            for row in conn.execute(
+                """
+                SELECT * FROM run_contracts
+                WHERE linked_budget_id = ?
+                ORDER BY fin_id
+                """,
+                (budget["budget_id"],),
+            )
+        ]
+
+        cross = _cross_links_via_projects(
+            conn,
+            [p["id"] for p in linked_projects if p.get("edge_id")],
+            exclude_type="budget",
+            exclude_id=budget_line_id,
+        )
+        # Merge FK run contracts with edge-based ones (dedupe by id).
+        seen_rc = {rc["id"] for rc in linked_run_contracts}
+        for rc in cross["linked_run_contracts"]:
+            if rc["id"] not in seen_rc:
+                linked_run_contracts.append(rc)
+                seen_rc.add(rc["id"])
+
+    return {
+        "budget": budget_dict,
+        "linked_projects": linked_projects,
+        "linked_risks": cross["linked_risks"],
+        "linked_architecture": cross["linked_architecture"],
+        "linked_budgets": cross["linked_budgets"],
+        "linked_run_contracts": linked_run_contracts,
+    }
+
+
+def fetch_run_contract_detail(fin_id):
+    """Return one run contract plus linked projects, budget, and siblings."""
+    init_db()
+    with get_connection() as conn:
+        contract = conn.execute(
+            "SELECT * FROM run_contracts WHERE fin_id = ?", (fin_id,)
+        ).fetchone()
+        if contract is None:
+            return None
+
+        zone_ctx = fetch_sub_zone_context(conn, contract["sub_zone_id"])
+        contract_dict = _enrich_run_contract(contract)
+        if zone_ctx:
+            contract_dict.update(zone_ctx)
+
+        linked_projects = _projects_linked_to(conn, "run_contract", fin_id)
+
+        linked_budgets = []
+        budget_row = conn.execute(
+            "SELECT * FROM budgets WHERE budget_id = ?",
+            (contract["linked_budget_id"],),
+        ).fetchone()
+        if budget_row:
+            item = _enrich_budget(dict(budget_row))
+            item["edge_id"] = None
+            item["relationship"] = "funds"
+            linked_budgets.append(item)
+
+        cross = _cross_links_via_projects(
+            conn,
+            [p["id"] for p in linked_projects],
+            exclude_type="run_contract",
+            exclude_id=fin_id,
+        )
+        seen_budgets = {b["id"] for b in linked_budgets}
+        for budget in cross["linked_budgets"]:
+            if budget["id"] not in seen_budgets:
+                linked_budgets.append(budget)
+                seen_budgets.add(budget["id"])
+
+    return {
+        "run_contract": contract_dict,
+        "linked_projects": linked_projects,
+        "linked_risks": cross["linked_risks"],
+        "linked_architecture": cross["linked_architecture"],
+        "linked_budgets": linked_budgets,
+        "linked_run_contracts": cross["linked_run_contracts"],
     }
 
 

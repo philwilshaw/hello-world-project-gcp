@@ -385,6 +385,13 @@ h2 {
   color: var(--text);
 }
 
+.field-block {
+  margin: 0;
+  white-space: pre-wrap;
+  font: inherit;
+  color: inherit;
+}
+
 .section-title {
   font-size: 1rem;
   margin: 1.4rem 0 0.7rem;
