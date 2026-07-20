@@ -1,0 +1,14 @@
+---
+description: Always commit and push completed work to the dev branch without asking
+alwaysApply: true
+---
+
+# Always push to dev
+
+After finishing a task that changes the codebase:
+
+1. Commit the relevant changes (follow the normal git safety protocol).
+2. Push to `origin/dev` immediately — do **not** ask whether to push.
+3. Do not wait for the user to say "push to dev"; treat it as the default final step.
+
+Exceptions: do not push if the user explicitly says not to, or if there is nothing to commit.
