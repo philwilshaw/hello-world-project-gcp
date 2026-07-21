@@ -4,12 +4,58 @@ Zones visualisation: L1 zones, L2 sub-zones, and L3 capabilities.
 
 from db import fetch_zones_tree
 from ui import esc, render_page
+from zones_data import ZONES
 
 from flask import Blueprint
 
 zones_bp = Blueprint("zones", __name__)
 
+_ZONE_PEOPLE = {
+    zone["id"]: {
+        "enterprise_architect": zone["enterprise_architect"],
+        "stakeholders": zone["stakeholders"],
+    }
+    for zone in ZONES
+}
+
 EXTRA_CSS = """
+.zones-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 0.85rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.85rem;
+}
+
+.zones-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.zones-controls input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.zones-grid.hide-l2 .sub-zone-block {
+  display: none;
+}
+
+.zones-grid.hide-l3 .capability-list,
+.zones-grid.hide-l3 .sub-zone-meta {
+  display: none;
+}
+
 .zones-legend {
   display: flex;
   flex-wrap: wrap;
@@ -38,8 +84,20 @@ EXTRA_CSS = """
 
 .zones-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.1rem;
+}
+
+@media (max-width: 1100px) {
+  .zones-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .zones-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .zone-card {
@@ -170,6 +228,57 @@ EXTRA_CSS = """
   border-color: rgba(125, 211, 192, 0.45);
   color: var(--accent);
 }
+
+.zone-card-footer {
+  margin-top: auto;
+  padding: 0.85rem 1rem 1rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.zone-card-footer strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.zone-card-footer .people-label {
+  margin-top: 0.5rem;
+}
+
+.zone-card-footer .people-label:first-child {
+  margin-top: 0;
+}
+
+.zone-card-footer .people-list {
+  margin: 0.35rem 0 0 1.1rem;
+  padding: 0;
+  color: var(--muted);
+}
+
+.zone-card-footer .people-list li {
+  margin-bottom: 0.2rem;
+}
+"""
+
+EXTRA_JS = """
+<script>
+  (function () {
+    const grid = document.querySelector(".zones-grid");
+    const toggleL2 = document.getElementById("zones-show-l2");
+    const toggleL3 = document.getElementById("zones-show-l3");
+    if (!grid || !toggleL2 || !toggleL3) return;
+
+    function syncVisibility() {
+      grid.classList.toggle("hide-l2", !toggleL2.checked);
+      grid.classList.toggle("hide-l3", !toggleL3.checked);
+    }
+
+    toggleL2.addEventListener("change", syncVisibility);
+    toggleL3.addEventListener("change", syncVisibility);
+    syncVisibility();
+  })();
+</script>
 """
 
 
@@ -187,6 +296,15 @@ def _entity_tags(sub_zone: dict) -> str:
 
 
 def _zone_card(zone: dict) -> str:
+    people = _ZONE_PEOPLE.get(zone["id"], {})
+    architect = people.get("enterprise_architect", "TBD")
+    stakeholders = people.get("stakeholders", [])
+    architect_item = f"<li>{esc(architect)}</li>"
+    stakeholder_items = "".join(
+        f"<li>{esc(name)} ({esc(title)})</li>"
+        for name, title in stakeholders
+    )
+
     sub_blocks = []
     for sub_zone in zone["sub_zones"]:
         caps = "".join(
@@ -226,6 +344,12 @@ def _zone_card(zone: dict) -> str:
       <div class="zone-body">
         {"".join(sub_blocks)}
       </div>
+      <div class="zone-card-footer">
+        <div class="people-label"><strong>Enterprise Architect:</strong></div>
+        <ul class="people-list">{architect_item}</ul>
+        <div class="people-label"><strong>Stakeholders:</strong></div>
+        <ul class="people-list">{stakeholder_items}</ul>
+      </div>
     </article>
     """
 
@@ -235,6 +359,17 @@ def zones_page():
     data = fetch_zones_tree()
     cards = "".join(_zone_card(zone) for zone in data["zones"])
     body = f"""
+<div class="zones-controls">
+  <span>Show:</span>
+  <label for="zones-show-l2">
+    <input type="checkbox" id="zones-show-l2" />
+    L2 sub-zones
+  </label>
+  <label for="zones-show-l3">
+    <input type="checkbox" id="zones-show-l3" />
+    L3 capabilities
+  </label>
+</div>
 <div class="zones-legend">
   <span><i class="legend-pill l1"></i>L1 Zone</span>
   <span><i class="legend-pill l2"></i>L2 Sub-zone</span>
@@ -250,4 +385,5 @@ def zones_page():
         active="Zones",
         body=body,
         extra_css=EXTRA_CSS,
+        extra_js=EXTRA_JS,
     )

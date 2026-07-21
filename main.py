@@ -6,8 +6,10 @@ from admin import admin_bp
 from architecture_roadmap import architecture_roadmap_bp
 from architecture_views import architecture_views_bp
 from catalog import catalog_bp
+from cost_dashboard import cost_dashboard_bp
 from db import get_db_status, init_db
 from diagram import diagram_bp
+from run_contract_roadmap import run_contract_roadmap_bp
 from sitemap import sitemap_bp
 from zones import zones_bp
 from ui import esc, register_layout, render_page
@@ -17,6 +19,8 @@ app.register_blueprint(diagram_bp)
 app.register_blueprint(architecture_roadmap_bp)
 app.register_blueprint(architecture_views_bp)
 app.register_blueprint(catalog_bp)
+app.register_blueprint(cost_dashboard_bp)
+app.register_blueprint(run_contract_roadmap_bp)
 app.register_blueprint(sitemap_bp)
 app.register_blueprint(zones_bp)
 app.register_blueprint(admin_bp)
@@ -25,9 +29,255 @@ init_db()
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "local")
 
+HOME_CARDS = [
+    {
+        "href": "/zones",
+        "title": "Zones",
+        "blurb": "Explore the L1 / L2 / L3 operating hierarchy and zone owners.",
+        "image": "/static/home/zones.svg",
+        "theme": "zones",
+    },
+    {
+        "href": "/projects",
+        "title": "Project List",
+        "blurb": "Browse every project with cost, dates, and RAG status.",
+        "image": "/static/home/project-list.svg",
+        "theme": "projects",
+    },
+    {
+        "href": "/diagram",
+        "title": "Project Roadmap",
+        "blurb": "See project timelines grouped by zone and sub-zone.",
+        "image": "/static/home/project-roadmap.svg",
+        "theme": "projects",
+    },
+    {
+        "href": "/architecture",
+        "title": "Architecture List",
+        "blurb": "Review architecture components and their outlook.",
+        "image": "/static/home/architecture-list.svg",
+        "theme": "architecture",
+    },
+    {
+        "href": "/architecture/diagram",
+        "title": "Architecture Diagram",
+        "blurb": "Trace relationships between architecture elements.",
+        "image": "/static/home/architecture-diagram.svg",
+        "theme": "architecture",
+    },
+    {
+        "href": "/architecture/capabilities",
+        "title": "Architecture Model",
+        "blurb": "Navigate Zone → SubZone → Capability structure.",
+        "image": "/static/home/architecture-model.svg",
+        "theme": "architecture",
+    },
+    {
+        "href": "/architecture/roadmap",
+        "title": "Architecture Roadmap",
+        "blurb": "Follow component lifespans and project go-live impacts.",
+        "image": "/static/home/architecture-roadmap.svg",
+        "theme": "architecture",
+    },
+    {
+        "href": "/risks",
+        "title": "Risk List",
+        "blurb": "Inspect corporate risks, scores, and responses.",
+        "image": "/static/home/risk-list.svg",
+        "theme": "risks",
+    },
+    {
+        "href": "/cost-dashboard",
+        "title": "Cost Dashboard",
+        "blurb": "Compare Capex and Opex spend by zone and year.",
+        "image": "/static/home/cost-dashboard.svg",
+        "theme": "finance",
+    },
+    {
+        "href": "/budgets",
+        "title": "Budget List",
+        "blurb": "Open budget lines that fund projects and contracts.",
+        "image": "/static/home/budget-list.svg",
+        "theme": "finance",
+    },
+    {
+        "href": "/run-contracts",
+        "title": "Run Contract List",
+        "blurb": "Browse vendor run contracts and renewal dates.",
+        "image": "/static/home/run-contract-list.svg",
+        "theme": "finance",
+    },
+    {
+        "href": "/run-contracts/roadmap",
+        "title": "Run Contract Roadmap",
+        "blurb": "Visualise contract terms, PO renewals, and next actions.",
+        "image": "/static/home/run-contract-roadmap.svg",
+        "theme": "finance",
+    },
+    {
+        "href": "/about",
+        "title": "About this site",
+        "blurb": "How this demo was built, what was learned, and what is next.",
+        "image": "/static/home/about.svg",
+        "theme": "about",
+    },
+]
+
+HOME_CSS = """
+.home-intro {
+  margin: 0 0 1.75rem;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.55;
+  max-width: none;
+  width: 100%;
+}
+.home-intro strong {
+  color: var(--text);
+  font-weight: 650;
+}
+.home-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.15rem;
+}
+@media (max-width: 1100px) {
+  .home-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .home-card-grid { grid-template-columns: 1fr; }
+}
+.home-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.02);
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+.home-card:hover {
+  transform: translateY(-2px);
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.04);
+}
+.home-card-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: #10151c;
+}
+.home-card-body {
+  padding: 0.95rem 1rem 1.1rem;
+  border-top: 1px solid var(--line);
+}
+.home-card-kicker {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+.home-card-title {
+  font-size: 1.08rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+  color: var(--text);
+}
+.home-card-blurb {
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.home-card.theme-zones {
+  border-color: rgba(125, 211, 192, 0.35);
+}
+.home-card.theme-zones .home-card-kicker { color: #7dd3c0; }
+.home-card.theme-zones:hover { border-color: rgba(125, 211, 192, 0.65); }
+.home-card.theme-projects {
+  border-color: rgba(91, 141, 239, 0.35);
+}
+.home-card.theme-projects .home-card-kicker { color: #5b8def; }
+.home-card.theme-projects:hover { border-color: rgba(91, 141, 239, 0.65); }
+.home-card.theme-architecture {
+  border-color: rgba(240, 162, 2, 0.35);
+}
+.home-card.theme-architecture .home-card-kicker { color: #f0a202; }
+.home-card.theme-architecture:hover { border-color: rgba(240, 162, 2, 0.65); }
+.home-card.theme-risks {
+  border-color: rgba(232, 93, 76, 0.35);
+}
+.home-card.theme-risks .home-card-kicker { color: #e85d4c; }
+.home-card.theme-risks:hover { border-color: rgba(232, 93, 76, 0.65); }
+.home-card.theme-finance {
+  border-color: rgba(60, 179, 113, 0.35);
+}
+.home-card.theme-finance .home-card-kicker { color: #3cb371; }
+.home-card.theme-finance:hover { border-color: rgba(60, 179, 113, 0.65); }
+.home-card.theme-about {
+  border-color: rgba(143, 160, 181, 0.35);
+}
+.home-card.theme-about .home-card-kicker { color: #8fa0b5; }
+.home-card.theme-about:hover { border-color: rgba(143, 160, 181, 0.65); }
+"""
+
+THEME_LABELS = {
+    "zones": "Zones",
+    "projects": "Projects",
+    "architecture": "Architecture",
+    "risks": "Risks",
+    "finance": "Finance",
+    "about": "About",
+}
+
+
+def _home_cards_html() -> str:
+    cards = []
+    for card in HOME_CARDS:
+        theme = card["theme"]
+        cards.append(
+            f"""
+            <a class="home-card theme-{esc(theme)}" href="{esc(card['href'])}">
+              <img class="home-card-image" src="{esc(card['image'])}" alt="" />
+              <div class="home-card-body">
+                <div class="home-card-kicker">{esc(THEME_LABELS.get(theme, theme))}</div>
+                <div class="home-card-title">{esc(card['title'])}</div>
+                <p class="home-card-blurb">{esc(card['blurb'])}</p>
+              </div>
+            </a>
+            """
+        )
+    return "\n".join(cards)
+
 
 @app.route("/")
 def hello():
+    body = f"""
+<p class="home-intro">
+  <strong>PhilTech portfolio demo</strong> — a cloud-hosted sample of how technology
+  delivery, architecture, risk, and run finance can sit together. Browse zones,
+  projects, architecture, risks, budgets, and run contracts through linked catalogs,
+  roadmaps, and a cost dashboard. All data is dummy sample content hosted on personal GCP.
+</p>
+<div class="home-card-grid">
+  {_home_cards_html()}
+</div>
+"""
+    return render_page(
+        title="PhilTech portfolio demo",
+        subtitle="Zones, projects, architecture, risk, and finance — linked in one place",
+        active="Home",
+        body=body,
+        extra_css=HOME_CSS,
+        wide=True,
+    )
+
+
+@app.route("/about")
+def about_page():
     status = get_db_status()
     writes_enabled = status["writes_enabled"]
     writes_label = (
@@ -37,8 +287,6 @@ def hello():
     safe_label = "available" if status["has_last_safe"] else "not set yet"
     bucket = status["database_bucket"] or "local file only"
     env = esc(ENVIRONMENT)
-    disabled_attr = "" if status["has_last_safe"] else " disabled"
-
     body = f"""
 <div class="prose">
 <div class="panel">
@@ -52,17 +300,22 @@ def hello():
     Link add/remove controls are disabled when changes are locked.
   </p>
   <p class="note">
-    This environment has its own database, with restore-to-last-safe available from
-    this page. Hourly backup and midnight reset jobs are built into the app, but the
-    Cloud Scheduler setup is still outstanding. Demo edits should be treated as
-    temporary unless a new last-safe snapshot is created from Cursor.
+    This environment has its own database. Hourly backup and midnight reset jobs are
+    built into the app, but the Cloud Scheduler setup is still outstanding. Demo edits
+    should be treated as temporary unless a new last-safe snapshot is created from
+    Cursor.
   </p>
   <p style="margin:0.85rem 0 0.35rem">
-    <button id="restore-btn" type="button"{disabled_attr}>
+    <button id="restore-btn" class="restore-btn" type="button" disabled
+      title="Restore is temporarily disabled">
       Restore database to last safe copy
     </button>
   </p>
-  <div id="restore-status"></div>
+  <p style="margin:0.35rem 0 0">
+    <button id="export-csv-btn" class="export-csv-btn" type="button">
+      Download database to CSV
+    </button>
+  </p>
 </div>
 
 <h2>What I accomplished</h2>
@@ -137,6 +390,56 @@ def hello():
 <li>Prepared backup and midnight-reset endpoints, plus a saved setup prompt for finishing Cloud Scheduler later</li>
 </ul>
 
+<h3>10. Added a zones hierarchy</h3>
+<ul>
+<li>Modelled L1 zones, L2 sub-zones, and L3 capabilities in the database</li>
+<li>Built a Zones page with zone owners, descriptions, and entity counts</li>
+<li>Added toggles to show or hide L2 and L3 detail on the Zones page</li>
+<li>Linked projects, risks, architecture, budgets, and run contracts back to zones and sub-zones</li>
+</ul>
+
+<h3>11. Expanded the data model from an Excel schema workbook</h3>
+<ul>
+<li>Updated the schema to match a multi-tab Excel workbook covering projects, risks, architecture, budgets, run contracts, and edges</li>
+<li>Added new <code>budgets</code> and <code>run_contracts</code> tables, and expanded project / risk / architecture columns</li>
+<li>Generated 50 sample records each for projects, risks, architecture, budgets, and run contracts</li>
+<li>Wired edges so projects link to risks, architecture, budgets, and run contracts, following the workbook rules</li>
+</ul>
+
+<h3>12. Built budget and run contract catalogs</h3>
+<ul>
+<li>Added Budget List and Budget Detail pages with all budget columns</li>
+<li>Added Run Contract List and Run Contract Detail pages with all contract columns</li>
+<li>Extended every detail page to show linked projects, risks, architecture, budgets, and run contracts</li>
+<li>Included cross-links via shared projects, plus owning-budget and funded-by-budget relationships</li>
+</ul>
+
+<h3>13. Upgraded the Project Roadmap and Architecture Model</h3>
+<ul>
+<li>Renamed Timeline to Project Roadmap and grouped projects by zone and sub-zone in faint boxes</li>
+<li>Aligned milestones to project end dates, stacked them vertically with one-line labels, and collapsed empty space when filters hide them</li>
+<li>Slimmed project bars to title plus ID / dates</li>
+<li>Grouped the Architecture Model by Zone → SubZone → Capability in a denser 3-column layout</li>
+<li>Added checkboxes to show or hide architecture descriptions and owners, with cards shrinking when content is hidden</li>
+</ul>
+
+<h3>14. Built a Cost Dashboard</h3>
+<ul>
+<li>Added a Cost Dashboard page summarising budget Capex, Opex, and Total by zone for 2026–2029</li>
+<li>Shaded total columns and separated year groups with whitespace</li>
+<li>Added a stacked Capex / Opex bar chart grouped by zone then year, with £0.0m labels</li>
+<li>Listed the top 10 most expensive projects for 2026 and 2027, each linking to the project detail page</li>
+</ul>
+
+<h3>15. Polished the shared site chrome</h3>
+<ul>
+<li>Added a PhilTech logo in the header and increased H1 / H2 sizes across the site</li>
+<li>Made page subtitles render as H2 and renamed nav / page titles for clearer labels</li>
+<li>Centered all pages in a 1400px max-width container without changing inner content alignment</li>
+<li>Kept environment and database status messaging on the About page</li>
+<li>Expanded the site map to include budgets, run contracts, and the newer pages</li>
+</ul>
+
 <hr>
 
 <h2>What I built (big picture)</h2>
@@ -150,8 +453,8 @@ A working cloud system combining:
 <li>Serverless deployment (Cloud Run)</li>
 <li>Automated builds triggered by code changes</li>
 <li>Separate development and production environments</li>
-<li>A SQLite-backed demo data model for projects, risks, and architecture</li>
-<li>Interactive timelines, catalogs, architecture diagrams, and roadmap views</li>
+<li>A SQLite-backed data model for zones, projects, risks, architecture, budgets, and run contracts</li>
+<li>Interactive roadmaps, catalogs, architecture views, and a cost dashboard</li>
 <li>Environment-specific data storage with restore and write-lock controls</li>
 </ul>
 
@@ -175,6 +478,8 @@ A working cloud system combining:
 <li>Designing a simple data model and keeping sample relationships consistent across pages</li>
 <li>Working out how ephemeral Cloud Run storage differs from durable database storage</li>
 <li>Separating demo editability from Cursor-only admin controls</li>
+<li>Turning an Excel workbook into a regenerated schema and large linked sample dataset</li>
+<li>Keeping roadmaps and dashboards readable as the volume of demo data grew</li>
 </ul>
 
 <hr>
@@ -191,8 +496,9 @@ A working cloud system combining:
 <li>How branch-based workflows support safe testing before production releases</li>
 <li>How environment variables distinguish development from production deployments</li>
 <li>How SQLite can power a small interactive demo before moving to a fuller database setup</li>
-<li>How timelines and architecture views can be driven from the same underlying tables and edges</li>
+<li>How timelines, architecture views, and cost views can be driven from the same underlying tables and edges</li>
 <li>How admin actions can be kept out of the public UI while still being controllable from Cursor</li>
+<li>How zone / sub-zone hierarchy and cross-linked catalogs make a portfolio demo feel coherent</li>
 </ul>
 
 <hr>
@@ -212,9 +518,10 @@ I started with no experience and now I can:
 <li>Let automated builds deploy my app when I push code</li>
 <li>Grow a hello-world app into a multi-page interactive demo with real sample data</li>
 <li>Iterate quickly with Cursor while keeping environment-specific cloud deployments working</li>
+<li>Extend a schema from spreadsheet instructions and keep list, detail, roadmap, and dashboard pages in sync</li>
 </ul>
 
-<p><strong>This project represents my first complete end-to-end cloud deployment, with separate development and production environments, plus an interactive project/risk/architecture demo on top.</strong></p>
+<p><strong>This project represents my first complete end-to-end cloud deployment, with separate development and production environments, plus an interactive portfolio demo covering zones, projects, risks, architecture, budgets, run contracts, and cost.</strong></p>
 
 <hr>
 
@@ -224,48 +531,233 @@ I started with no experience and now I can:
 <li><strong>Database backup scheduled jobs</strong> — finish Cloud Scheduler setup for hourly backups and midnight reset-to-last-safe (prompt saved in <code>scripts/tomorrow-scheduler-setup-prompt.txt</code>)</li>
 <li><strong>Admin token and bucket permissions</strong> — set <code>ADMIN_TOKEN</code> on Cloud Run and confirm each environment can read/write its own GCS database bucket</li>
 <li><strong>Mark and manage last-safe snapshots from Cursor</strong> — use the admin commands day to day once the token/jobs setup is complete</li>
-<li><strong>Excel-driven schema and sample data</strong> — use a 3-tab Excel workbook as the source for project, risk, and architecture column headings and sample rows; ignore marked columns; honour allowed-value notes above the table; regenerate edges; and provide a downloadable sample workbook to share</li>
 </ul>
 </div>
 """
 
-    restore_js = f"""
+    about_css = """
+.export-csv-btn {
+  background: var(--link);
+  color: #0d1524;
+}
+.export-csv-btn:disabled {
+  background: #5a6a82;
+  color: #c5cdd8;
+  cursor: wait;
+}
+.download-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 12, 20, 0.72);
+  backdrop-filter: blur(2px);
+}
+.download-overlay.visible {
+  display: flex;
+}
+.download-overlay-card {
+  max-width: 26rem;
+  margin: 1rem;
+  padding: 1.35rem 1.5rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #152033;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+.download-overlay-card h3 {
+  margin: 0 0 0.55rem;
+  font-size: 1.1rem;
+  color: var(--text);
+}
+.download-overlay-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.download-overlay-card .spinner {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0 auto 0.85rem;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: download-spin 0.8s linear infinite;
+}
+@keyframes download-spin {
+  to { transform: rotate(360deg); }
+}
+.download-overlay-card.error h3 {
+  color: #ffb4b4;
+}
+.download-overlay-card .overlay-actions {
+  margin-top: 1rem;
+}
+"""
+
+    about_js = """
 <script>
-  const restoreBtn = document.getElementById("restore-btn");
-  const restoreStatus = document.getElementById("restore-status");
-  if (restoreBtn) {{
-    restoreBtn.addEventListener("click", async () => {{
-      const ok = window.confirm(
-        "Restore the {ENVIRONMENT} database to the last safe copy?\\n\\nCurrent link edits in this environment will be discarded."
+(function () {
+  const btn = document.getElementById("export-csv-btn");
+  if (!btn) return;
+
+  const overlay = document.createElement("div");
+  overlay.className = "download-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-live", "polite");
+  overlay.innerHTML = `
+    <div class="download-overlay-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <h3>Preparing download</h3>
+      <p>Do not close this window until the download has completed.</p>
+      <div class="overlay-actions" hidden>
+        <button type="button" class="overlay-dismiss">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const card = overlay.querySelector(".download-overlay-card");
+  const title = card.querySelector("h3");
+  const message = card.querySelector("p");
+  const spinner = card.querySelector(".spinner");
+  const actions = card.querySelector(".overlay-actions");
+  const dismiss = card.querySelector(".overlay-dismiss");
+
+  let downloading = false;
+  let objectUrl = null;
+
+  function warnIfLeaving(event) {
+    if (!downloading) return;
+    event.preventDefault();
+    event.returnValue = "";
+  }
+
+  function showBusy() {
+    downloading = true;
+    window.addEventListener("beforeunload", warnIfLeaving);
+    btn.disabled = true;
+    card.classList.remove("error");
+    spinner.hidden = false;
+    actions.hidden = true;
+    title.textContent = "Preparing download";
+    message.textContent =
+      "Do not close this window until the download has completed.";
+    overlay.classList.add("visible");
+  }
+
+  function showError(text) {
+    downloading = false;
+    window.removeEventListener("beforeunload", warnIfLeaving);
+    btn.disabled = false;
+    spinner.hidden = true;
+    actions.hidden = false;
+    card.classList.add("error");
+    title.textContent = "Download failed";
+    message.textContent = text || "Something went wrong while exporting the database.";
+  }
+
+  function hideOverlay() {
+    downloading = false;
+    window.removeEventListener("beforeunload", warnIfLeaving);
+    btn.disabled = false;
+    overlay.classList.remove("visible");
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+      objectUrl = null;
+    }
+  }
+
+  dismiss.addEventListener("click", hideOverlay);
+
+  function filenameFromDisposition(header) {
+    if (!header) return null;
+    const utfMatch = /filename\\*=UTF-8''([^;]+)/i.exec(header);
+    if (utfMatch) {
+      try {
+        return decodeURIComponent(utfMatch[1].trim());
+      } catch (err) {
+        return utfMatch[1].trim();
+      }
+    }
+    const plainMatch = /filename=\"?([^\";]+)\"?/i.exec(header);
+    return plainMatch ? plainMatch[1].trim() : null;
+  }
+
+  btn.addEventListener("click", async function () {
+    if (downloading) return;
+    showBusy();
+    try {
+      const response = await fetch("/api/db/export-csv", {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        let detail = "Export failed (HTTP " + response.status + ").";
+        try {
+          const data = await response.json();
+          if (data && data.error) detail = data.error;
+        } catch (err) {
+          /* ignore non-JSON error bodies */
+        }
+        showError(detail);
+        return;
+      }
+
+      const blob = await response.blob();
+      if (!blob || blob.size === 0) {
+        showError("The export file was empty. Please try again.");
+        return;
+      }
+
+      const fallbackName =
+        "database-export-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".zip";
+      const filename =
+        filenameFromDisposition(response.headers.get("Content-Disposition")) ||
+        fallbackName;
+
+      objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      title.textContent = "Download started";
+      message.textContent =
+        "Your ZIP of CSV files should appear in your downloads folder shortly.";
+      spinner.hidden = true;
+      actions.hidden = false;
+      downloading = false;
+      window.removeEventListener("beforeunload", warnIfLeaving);
+      btn.disabled = false;
+      window.setTimeout(hideOverlay, 1800);
+    } catch (err) {
+      showError(
+        (err && err.message) ||
+          "Network error while preparing the export. Please try again."
       );
-      if (!ok) return;
-      restoreBtn.disabled = true;
-      restoreStatus.textContent = "Restoring...";
-      try {{
-        const response = await fetch("/api/db/restore-last-safe", {{ method: "POST" }});
-        const data = await response.json();
-        if (!response.ok) {{
-          restoreStatus.textContent = data.error || "Restore failed";
-          restoreBtn.disabled = false;
-          return;
-        }}
-        restoreStatus.textContent = data.message || "Restored.";
-        window.setTimeout(() => window.location.reload(), 800);
-      }} catch (err) {{
-        restoreStatus.textContent = "Restore failed";
-        restoreBtn.disabled = false;
-      }}
-    }});
-  }}
+    }
+  });
+})();
 </script>
 """
 
     return render_page(
-        title="My First Cloud Deployment Project",
-        subtitle="Welcome to the demo site",
-        active="Home",
+        title="About this site",
+        subtitle="Build story, database status, and what comes next",
+        active="About this site",
         body=body,
-        extra_js=restore_js,
+        extra_css=about_css,
+        extra_js=about_js,
     )
 
 

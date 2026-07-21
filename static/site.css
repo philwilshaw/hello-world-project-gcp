@@ -60,41 +60,140 @@ a:hover {
   text-decoration: underline;
 }
 
+/* ---------- Page container ---------- */
+
+.site-container {
+  width: 100%;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+}
+
 /* ---------- Site header / menu ---------- */
 
 .site-header {
-  padding: 1rem 1.5rem;
+  padding: 1.75rem 1.5rem 1.15rem;
   border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.045);
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  align-items: stretch;
+  gap: 0.55rem;
 }
 
-.site-header-top {
+.header-top {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 1rem;
-  flex-wrap: wrap;
+}
+
+.header-titles {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-top: 0.35rem;
 }
 
 .site-header h1 {
-  font-size: 1.15rem;
-  font-weight: 650;
+  font-size: 1.85rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0.5rem 0 0;
 }
 
+.site-header h2.subtitle,
 .site-header .subtitle {
   color: var(--muted);
-  font-size: 0.85rem;
-  width: 100%;
+  font-size: 1.2rem;
+  font-weight: 550;
+  line-height: 1.35;
+  margin: 0.35rem 0 0;
+}
+
+.header-brand {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  text-align: right;
+}
+
+.header-logo {
+  display: block;
+  line-height: 0;
+  text-decoration: none;
+}
+
+.header-logo img {
+  display: block;
+  height: 48px;
+  width: auto;
+}
+
+.header-logo:hover {
+  text-decoration: none;
+  opacity: 0.9;
+}
+
+.header-brand-note {
   margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  color: var(--muted);
+  max-width: 11.5rem;
+}
+
+@media (max-width: 640px) {
+  .site-header h1 {
+    font-size: 1.45rem;
+  }
+
+  .site-header h2.subtitle,
+  .site-header .subtitle {
+    font-size: 1.05rem;
+  }
+
+  .header-logo img {
+    height: 40px;
+  }
+
+  .header-brand-note {
+    font-size: 0.62rem;
+    max-width: 9.5rem;
+  }
 }
 
 .site-nav {
-  margin-left: auto;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 1.35rem;
   font-size: 0.85rem;
+  margin-top: 0.55rem;
+}
+
+.site-nav a.nav-top,
+.site-nav .nav-top {
+  color: var(--accent);
+}
+
+.site-nav a.nav-top:hover {
+  text-decoration: underline;
+}
+
+.site-nav .nav-top.active {
+  color: var(--text);
+  font-weight: 650;
 }
 
 .site-nav a {
@@ -110,21 +209,77 @@ a:hover {
   font-weight: 650;
 }
 
+.nav-dropdown {
+  position: relative;
+}
+
+.nav-dropdown-label {
+  cursor: pointer;
+  color: var(--accent);
+  list-style: none;
+  user-select: none;
+}
+
+.nav-dropdown-label::-webkit-details-marker {
+  display: none;
+}
+
+.nav-dropdown-label::after {
+  content: " ▾";
+  font-size: 0.72em;
+  opacity: 0.85;
+}
+
+.nav-dropdown[open] .nav-dropdown-label,
+.nav-dropdown-label.active {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.nav-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  min-width: 12rem;
+  padding: 0.45rem 0;
+  background: #1a2330;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.nav-dropdown-menu a,
+.nav-dropdown-menu .active {
+  display: block;
+  padding: 0.4rem 0.9rem;
+  white-space: nowrap;
+}
+
+.nav-dropdown-menu a:hover {
+  background: rgba(125, 211, 192, 0.08);
+  text-decoration: none;
+}
+
+.nav-dropdown-menu .active {
+  background: rgba(125, 211, 192, 0.12);
+}
+
 .site-main {
   padding: 1.25rem 1.5rem 2rem;
-  max-width: 1100px;
   flex: 1;
+  width: 100%;
 }
 
 .site-main.wide {
-  max-width: none;
-  padding-left: 0;
-  padding-right: 0;
   padding-bottom: 1.5rem;
 }
 
 .site-hint {
-  padding: 0 1.5rem 1.25rem;
+  padding: 0 0 1.25rem;
   color: var(--muted);
   font-size: 0.75rem;
 }
@@ -135,7 +290,7 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 0.85rem 1.1rem;
-  padding: 0.75rem 1.5rem;
+  padding: 0.75rem 0;
   color: var(--muted);
   font-size: 0.8rem;
 }
@@ -176,7 +331,7 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem 1.25rem;
-  padding: 0.85rem 1.5rem 0.35rem;
+  padding: 0.85rem 0 0.35rem;
   color: var(--muted);
   font-size: 0.82rem;
   border-bottom: 1px solid rgba(43, 58, 77, 0.55);
@@ -256,6 +411,16 @@ button:disabled,
   cursor: not-allowed;
 }
 
+button.restore-btn:disabled {
+  background: #3d4654;
+  color: #8b95a5;
+  border: 1px dashed #5a6578;
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.45);
+  box-shadow: none;
+}
+
 /* ---------- Catalog / tables / detail ---------- */
 
 .table-wrap {
@@ -306,8 +471,17 @@ tr:last-child td {
 }
 
 .detail-card h2 {
-  font-size: 1.35rem;
-  margin-bottom: 0.85rem;
+  font-size: 1.65rem;
+  margin: 1rem 0 0.85rem;
+}
+
+h1 {
+  margin-top: 0.75rem;
+}
+
+h2 {
+  font-size: 1.5rem;
+  margin-top: 1.5rem;
 }
 
 .fields {
@@ -323,6 +497,13 @@ tr:last-child td {
 
 .fields dd {
   color: var(--text);
+}
+
+.field-block {
+  margin: 0;
+  white-space: pre-wrap;
+  font: inherit;
+  color: inherit;
 }
 
 .section-title {
@@ -479,8 +660,8 @@ button.remove-link:disabled {
 /* ---------- Homepage prose ---------- */
 
 .prose h2 {
-  margin: 1.5rem 0 0.75rem;
-  font-size: 1.15rem;
+  margin: 2rem 0 0.75rem;
+  font-size: 1.5rem;
 }
 
 .prose h3 {
@@ -514,7 +695,6 @@ button.remove-link:disabled {
   width: 100%;
   padding: 1.25rem 1.5rem calc(1.75rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--line);
-  background: var(--bg);
   color: var(--muted);
   font-size: 0.82rem;
   line-height: 1.5;
@@ -544,8 +724,8 @@ button.remove-link:disabled {
 }
 
 .sitemap-heading {
-  font-size: 1rem;
-  margin-bottom: 0.35rem;
+  font-size: 1.5rem;
+  margin: 1.75rem 0 0.35rem;
 }
 
 .sitemap-heading-main {

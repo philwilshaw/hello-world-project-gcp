@@ -10,6 +10,11 @@ ZONES = [
         "owner_name": "Britney Spears",
         "owner_image": "/static/zones/zone-z1.jpg",
         "description": "Growth, monetisation, and customer lifecycle for the SaaS product.",
+        "enterprise_architect": "Whitney Houston",
+        "stakeholders": [
+            ("Christina Aguilera", "Chief Revenue Evangelist"),
+            ("Usher", "Head of Conversion Science"),
+        ],
         "sub_zones": [
             {
                 "name": "Growth & Acquisition",
@@ -92,6 +97,11 @@ ZONES = [
         "owner_name": "Mel B (Spice Girls)",
         "owner_image": "/static/zones/zone-z2.jpg",
         "description": "Application delivery, developer experience, and product quality.",
+        "enterprise_architect": "Robyn",
+        "stakeholders": [
+            ("Will Smith", "Principal Build Engineer"),
+            ("Aaliyah", "Director of Developer Experience"),
+        ],
         "sub_zones": [
             {
                 "name": "Core Application Platform",
@@ -175,6 +185,11 @@ ZONES = [
         "owner_name": "Nick Carter (Backstreet Boys)",
         "owner_image": "/static/zones/zone-z3.jpg",
         "description": "Cloud infrastructure, integration fabric, and operational resilience.",
+        "enterprise_architect": "Celine Dion",
+        "stakeholders": [
+            ("Shaggy", "Cloud Infrastructure Lead"),
+            ("Lauryn Hill", "Integration Programme Manager"),
+        ],
         "sub_zones": [
             {
                 "name": "Compute & Orchestration",
@@ -258,6 +273,11 @@ ZONES = [
         "owner_name": "Mariah Carey",
         "owner_image": "/static/zones/zone-z4.jpg",
         "description": "Data platforms, analytics, and machine learning capabilities.",
+        "enterprise_architect": "George Michael",
+        "stakeholders": [
+            ("Brandy", "Analytics Programme Lead"),
+            ("Monica", "ML Operations Sponsor"),
+        ],
         "sub_zones": [
             {
                 "name": "Data Ingestion",
@@ -352,6 +372,11 @@ ZONES = [
         "owner_name": "Janet Jackson",
         "owner_image": "/static/zones/zone-z5.jpg",
         "description": "Identity, application security, and regulatory compliance.",
+        "enterprise_architect": "Prince",
+        "stakeholders": [
+            ("Seal", "Compliance Assurance Director"),
+            ("Sinéad O'Connor", "Risk & Audit Liaison"),
+        ],
         "sub_zones": [
             {
                 "name": "Identity & Access",
@@ -435,6 +460,11 @@ ZONES = [
         "owner_name": "Ricky Martin",
         "owner_image": "/static/zones/zone-z6.jpg",
         "description": "Corporate systems supporting finance, HR, legal, and workplace IT.",
+        "enterprise_architect": "Elton John",
+        "stakeholders": [
+            ("Shania Twain", "Finance Transformation Lead"),
+            ("Garth Brooks", "Workplace Systems Owner"),
+        ],
         "sub_zones": [
             {
                 "name": "Finance Systems",

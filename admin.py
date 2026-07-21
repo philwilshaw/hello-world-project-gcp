@@ -4,6 +4,7 @@ Database admin and status endpoints.
 Public:
   - GET  /api/db-status
   - POST /api/db/restore-last-safe   (home-page restore for current env)
+  - GET  /api/db/export-csv          (download all tables as a ZIP of CSVs)
 
 Admin-token only (Cursor / Cloud Scheduler — never exposed in the UI):
   - POST /internal/db/backup
@@ -13,12 +14,14 @@ Admin-token only (Cursor / Cloud Scheduler — never exposed in the UI):
 """
 
 import hmac
+import io
 import os
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 
 from db import (
     create_backup,
+    export_database_csv_zip,
     get_db_status,
     mark_last_safe,
     restore_last_safe,
@@ -51,6 +54,21 @@ def api_restore_last_safe():
     if not ok:
         return jsonify({"error": message}), 400
     return jsonify({"ok": True, "message": message, "status": get_db_status()})
+
+
+@admin_bp.route("/api/db/export-csv")
+def api_export_csv():
+    """Download every database table as a ZIP of CSV files."""
+    ok, message, filename, payload = export_database_csv_zip()
+    if not ok:
+        return jsonify({"error": message}), 500
+    return send_file(
+        io.BytesIO(payload),
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=filename,
+        max_age=0,
+    )
 
 
 @admin_bp.route("/internal/db/backup", methods=["POST"])

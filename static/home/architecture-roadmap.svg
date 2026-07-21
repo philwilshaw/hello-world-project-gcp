@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-hidden="true">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f0a202" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#10151c" stop-opacity="0.85"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" rx="28" fill="url(#bg)"/>
+  <rect x="18" y="18" width="604" height="324" rx="22" fill="none" stroke="#f0a202" stroke-opacity="0.35" stroke-width="2"/>
+  
+  <g stroke="#f0a202" stroke-opacity="0.25" stroke-width="2">
+    <line x1="140" y1="60" x2="140" y2="300"/>
+    <line x1="260" y1="60" x2="260" y2="300"/>
+    <line x1="380" y1="60" x2="380" y2="300"/>
+    <line x1="500" y1="60" x2="500" y2="300"/>
+  </g>
+  <rect x="150" y="100" width="280" height="40" rx="10" fill="#f0a202"/>
+  <rect x="200" y="180" width="240" height="40" rx="10" fill="#f0a202" fill-opacity="0.65"/>
+  <polygon points="260,95 268,112 286,112 272,124 278,142 260,132 242,142 248,124 234,112 252,112" fill="#f5d76e"/>
+  <polygon points="380,175 388,192 406,192 392,204 398,222 380,212 362,222 368,204 354,192 372,192" fill="#f5d76e"/>
+
+</svg>

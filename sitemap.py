@@ -4,7 +4,13 @@ Site map page — main pages plus database-driven detail links.
 
 from flask import Blueprint
 
-from db import fetch_all_architecture, fetch_all_projects, fetch_all_risks
+from db import (
+    fetch_all_architecture,
+    fetch_all_budgets,
+    fetch_all_projects,
+    fetch_all_risks,
+    fetch_all_run_contracts,
+)
 from ui import NAV_ITEMS, esc, render_page
 
 sitemap_bp = Blueprint("sitemap", __name__)
@@ -36,6 +42,8 @@ def sitemap_page():
     projects = fetch_all_projects()
     risks = fetch_all_risks()
     architecture = fetch_all_architecture()
+    budgets = fetch_all_budgets()
+    run_contracts = fetch_all_run_contracts()
 
     body = f"""
 <section class="sitemap-section">
@@ -67,6 +75,22 @@ def sitemap_page():
   <p class="sitemap-intro">Individual architecture component records from the database.</p>
   <ul class="sitemap-list sitemap-list-detail">
     {_detail_links(architecture, "/architecture/")}
+  </ul>
+</section>
+
+<section class="sitemap-section">
+  <h2 class="sitemap-heading sitemap-heading-detail">Budget detail pages</h2>
+  <p class="sitemap-intro">Individual budget line items from the database.</p>
+  <ul class="sitemap-list sitemap-list-detail">
+    {_detail_links(budgets, "/budgets/")}
+  </ul>
+</section>
+
+<section class="sitemap-section">
+  <h2 class="sitemap-heading sitemap-heading-detail">Run contract detail pages</h2>
+  <p class="sitemap-intro">Individual run contract records from the database.</p>
+  <ul class="sitemap-list sitemap-list-detail">
+    {_detail_links(run_contracts, "/run-contracts/")}
   </ul>
 </section>
 """

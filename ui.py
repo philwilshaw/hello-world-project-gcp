@@ -9,46 +9,144 @@ from datetime import datetime
 
 from flask import render_template_string
 
-NAV_ITEMS = [
+NAV_TOP_LEVEL = [
     ("/", "Home"),
     ("/zones", "Zones"),
-    ("/diagram", "Timeline"),
-    ("/projects", "Projects"),
-    ("/risks", "Risks"),
-    ("/architecture", "Architecture"),
-    ("/architecture/diagram", "Arch diagram"),
-    ("/architecture/capabilities", "By capability"),
-    ("/architecture/roadmap", "Arch roadmap"),
 ]
+
+NAV_DROPDOWNS = [
+    {
+        "label": "Projects",
+        "items": [
+            ("/projects", "Project List"),
+            ("/diagram", "Project Roadmap"),
+        ],
+    },
+    {
+        "label": "Architecture",
+        "items": [
+            ("/architecture", "Architecture List"),
+            ("/architecture/diagram", "Architecture Diagram"),
+            ("/architecture/capabilities", "Architecture Model"),
+            ("/architecture/roadmap", "Architecture Roadmap"),
+        ],
+    },
+    {
+        "label": "Risks",
+        "items": [
+            ("/risks", "Risk List"),
+        ],
+    },
+    {
+        "label": "Finance",
+        "items": [
+            ("/cost-dashboard", "Cost Dashboard"),
+            ("/budgets", "Budget List"),
+            ("/run-contracts", "Run Contract List"),
+            ("/run-contracts/roadmap", "Run Contract Roadmap"),
+        ],
+    },
+    {
+        "label": "Roadmaps",
+        "items": [
+            ("/diagram", "Project Roadmap"),
+            ("/architecture/roadmap", "Architecture Roadmap"),
+            ("/run-contracts/roadmap", "Run Contract Roadmap"),
+        ],
+    },
+]
+
+NAV_TRAILING = [
+    ("/about", "About this site"),
+]
+
+
+def all_nav_links() -> list[tuple[str, str]]:
+    """Flat link list for sitemap and other consumers (deduped by href)."""
+    seen: set[str] = set()
+    links: list[tuple[str, str]] = []
+    for href, label in [*NAV_TOP_LEVEL, *NAV_TRAILING]:
+        if href not in seen:
+            seen.add(href)
+            links.append((href, label))
+    for group in NAV_DROPDOWNS:
+        for href, label in group["items"]:
+            if href not in seen:
+                seen.add(href)
+                links.append((href, label))
+    return links
+
+
+# Back-compat alias used by sitemap.
+NAV_ITEMS = all_nav_links()
 
 
 def esc(value) -> str:
     return html.escape(str(value), quote=True)
 
 
+def _nav_link(href: str, label: str, active_lower: str, *, css_class: str = "nav-top") -> str:
+    if label.lower() == active_lower:
+        return f'<span class="{css_class} active">{esc(label)}</span>'
+    return f'<a class="{css_class}" href="{esc(href)}">{esc(label)}</a>'
+
+
 def render_nav(active: str | None = None) -> str:
     parts = []
-    for href, label in NAV_ITEMS:
-        if label.lower() == (active or "").lower():
-            parts.append(f'<span class="active">{esc(label)}</span>')
-        else:
-            parts.append(f'<a href="{esc(href)}">{esc(label)}</a>')
+    active_lower = (active or "").lower()
+
+    for href, label in NAV_TOP_LEVEL:
+        parts.append(_nav_link(href, label, active_lower))
+
+    for group in NAV_DROPDOWNS:
+        menu_parts = []
+        group_active = False
+        for href, label in group["items"]:
+            if label.lower() == active_lower:
+                menu_parts.append(f'<span class="active">{esc(label)}</span>')
+                group_active = True
+            else:
+                menu_parts.append(f'<a href="{esc(href)}">{esc(label)}</a>')
+
+        summary_class = (
+            ' class="nav-dropdown-label active"'
+            if group_active
+            else ' class="nav-dropdown-label"'
+        )
+        parts.append(
+            f'<details class="nav-dropdown">'
+            f'<summary{summary_class}>{esc(group["label"])}</summary>'
+            f'<div class="nav-dropdown-menu">{"".join(menu_parts)}</div>'
+            f"</details>"
+        )
+
+    for href, label in NAV_TRAILING:
+        parts.append(_nav_link(href, label, active_lower))
+
     return "\n".join(parts)
 
 
 def render_header(title: str, subtitle: str = "", active: str | None = None) -> str:
     subtitle_html = (
-        f'<p class="subtitle">{esc(subtitle)}</p>' if subtitle else ""
+        f'<h2 class="subtitle">{esc(subtitle)}</h2>' if subtitle else ""
     )
     return f"""
 <header class="site-header">
-  <div class="site-header-top">
-    <h1>{esc(title)}</h1>
-    <nav class="site-nav">
-      {render_nav(active)}
-    </nav>
+  <div class="header-top">
+    <div class="header-titles">
+      <h1>{esc(title)}</h1>
+      {subtitle_html}
+    </div>
+    <div class="header-brand">
+      <a class="header-logo" href="/" title="PhilTech">
+        <img src="/static/philtech-logo.svg" alt="PhilTech" width="160" height="48" />
+      </a>
+      <p class="header-brand-note">Dummy data hosted on personal GCP</p>
+    </div>
   </div>
-  {subtitle_html}
+  <nav class="site-nav">
+    {render_nav(active)}
+  </nav>
 </header>
 """
 
@@ -64,6 +162,26 @@ def render_footer() -> str:
 """
 
 
+NAV_JS = """
+<script>
+  document.querySelectorAll(".nav-dropdown").forEach((dropdown) => {
+    dropdown.addEventListener("toggle", () => {
+      if (!dropdown.open) return;
+      document.querySelectorAll(".nav-dropdown").forEach((other) => {
+        if (other !== dropdown) other.open = false;
+      });
+    });
+  });
+
+  document.addEventListener("click", (evt) => {
+    if (evt.target.closest(".nav-dropdown")) return;
+    document.querySelectorAll(".nav-dropdown").forEach((dropdown) => {
+      dropdown.open = false;
+    });
+  });
+</script>
+"""
+
 SHELL = """
 <!DOCTYPE html>
 <html lang="en">
@@ -77,9 +195,12 @@ SHELL = """
   {% endif %}
 </head>
 <body>
-  {{ header|safe }}
-  {{ body|safe }}
-  {{ footer|safe }}
+  <div class="site-container">
+    {{ header|safe }}
+    {{ body|safe }}
+    {{ footer|safe }}
+  </div>
+  {{ nav_js|safe }}
   {% if extra_js %}
   {{ extra_js|safe }}
   {% endif %}
@@ -114,6 +235,7 @@ def render_page(
         header=header,
         body=wrapped,
         footer=footer,
+        nav_js=NAV_JS,
         extra_css=extra_css,
         extra_js=extra_js,
     )

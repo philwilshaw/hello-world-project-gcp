@@ -16,7 +16,7 @@ diagram_bp = Blueprint("diagram", __name__)
 
 EXTRA_CSS = r"""
 .timeline-wrap {
-  padding: 0.5rem 1rem 1.5rem;
+  padding: 0.5rem 0 1.5rem;
   overflow-x: auto;
 }
 
@@ -78,6 +78,19 @@ EXTRA_CSS = r"""
   z-index: 1;
 }
 
+.zone-group {
+  margin-bottom: 1.35rem;
+}
+
+.zone-group-title {
+  margin: 0 0 0.55rem;
+  margin-left: -220px;
+  padding-left: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
 .row {
   display: grid;
   grid-template-columns: 220px 1fr;
@@ -102,18 +115,38 @@ EXTRA_CSS = r"""
   margin-bottom: 0.2rem;
 }
 
+.group-box {
+  position: relative;
+  border: 1px solid rgba(125, 211, 192, 0.28);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(16, 21, 28, 0.25);
+  padding: 0.55rem 0.5rem 0.65rem;
+}
+
+.project-lane {
+  position: relative;
+  margin-bottom: 0.45rem;
+  transition: opacity 180ms ease, min-height 180ms ease;
+}
+
+.project-lane:last-child {
+  margin-bottom: 0;
+}
+
 .track {
   position: relative;
-  min-height: 150px;
-  padding-bottom: 0.5rem;
+  min-height: 72px;
+  padding-bottom: 0.35rem;
+  transition: min-height 180ms ease;
 }
 
 .project-bar {
   position: absolute;
-  top: 14px;
-  height: 78px;
+  top: 10px;
+  height: 52px;
   border-radius: 8px;
-  padding: 0.55rem 0.7rem;
+  padding: 0.4rem 0.65rem;
   overflow: hidden;
   color: #fff;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
@@ -122,16 +155,19 @@ EXTRA_CSS = r"""
 }
 
 .project-bar .title {
-  font-size: 0.98rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  line-height: 1.2;
-  margin-bottom: 0.28rem;
+  line-height: 1.15;
+  margin-bottom: 0.18rem;
 }
 
 .project-bar .meta {
-  font-size: 0.68rem;
-  line-height: 1.35;
+  font-size: 0.66rem;
+  line-height: 1.25;
   opacity: 0.92;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .project-bar.rag-green { background: linear-gradient(180deg, #36b078, var(--rag-green)); }
@@ -140,19 +176,27 @@ EXTRA_CSS = r"""
 
 .impacts {
   position: absolute;
+  top: 68px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem 0.85rem;
+  flex-direction: column;
   align-items: flex-start;
+  gap: 0.35rem;
   z-index: 3;
+  max-width: min(420px, 45vw);
+}
+
+.impacts:empty,
+.impacts.no-visible {
+  display: none;
 }
 
 .impact {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 0.28rem;
-  width: 108px;
+  gap: 0.45rem;
+  width: auto;
+  max-width: 100%;
   cursor: pointer;
   transition: opacity 180ms ease, filter 180ms ease;
 }
@@ -215,15 +259,23 @@ EXTRA_CSS = r"""
 }
 
 .impact-label {
-  font-size: 0.66rem;
-  line-height: 1.25;
+  font-size: 0.7rem;
+  line-height: 1.2;
   color: var(--text);
-  text-align: center;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .impact-label .iid {
   color: var(--accent);
   font-weight: 650;
+}
+
+.impact-label .rel {
+  color: var(--muted);
 }
 
 .faded {
@@ -385,12 +437,12 @@ DIAGRAM_JS = r"""
     let selected = null;
 
     function applySelection() {
-      const rowEls = [...root.querySelectorAll(".row")];
+      const lanes = [...root.querySelectorAll(".project-lane")];
       const bars = [...root.querySelectorAll(".project-bar")];
       const impacts = [...root.querySelectorAll(".impact")];
 
       if (!selected) {
-        rowEls.forEach((el) => el.classList.remove("faded"));
+        lanes.forEach((el) => el.classList.remove("faded"));
         bars.forEach((el) => el.classList.remove("selected", "faded"));
         impacts.forEach((el) => el.classList.remove("selected", "faded"));
         return;
@@ -405,10 +457,10 @@ DIAGRAM_JS = r"""
           .map((e) => e.project_id)
       );
 
-      rowEls.forEach((row) => {
-        row.classList.toggle(
+      lanes.forEach((lane) => {
+        lane.classList.toggle(
           "faded",
-          !linkedProjects.has(row.dataset.projectId)
+          !linkedProjects.has(lane.dataset.projectId)
         );
       });
 
@@ -450,16 +502,29 @@ DIAGRAM_JS = r"""
       root.querySelectorAll(".impact.architecture").forEach((el) => {
         el.classList.toggle("hidden-layer", !showArch);
       });
+
+      root.querySelectorAll(".track").forEach((track) => {
+        const impacts = track.querySelector(".impacts");
+        if (!impacts) {
+          track.style.minHeight = "72px";
+          return;
+        }
+        const visible = [...impacts.querySelectorAll(".impact")].filter(
+          (el) => !el.classList.contains("hidden-layer")
+        );
+        impacts.classList.toggle("no-visible", visible.length === 0);
+        if (visible.length === 0) {
+          track.style.minHeight = "72px";
+        } else {
+          track.style.minHeight = 68 + visible.length * 28 + 12 + "px";
+        }
+      });
     }
 
-    for (const project of data.projects) {
-      const row = document.createElement("div");
-      row.className = "row";
-      row.dataset.projectId = project.id;
-
-      const label = document.createElement("div");
-      label.className = "row-label";
-      label.innerHTML = `<strong>${project.id}</strong>${project.rag_status} · Capex ${formatMoney(project.capex_gbp)}`;
+    function appendProjectLane(container, project) {
+      const lane = document.createElement("div");
+      lane.className = "project-lane";
+      lane.dataset.projectId = project.id;
 
       const track = document.createElement("div");
       track.className = "track";
@@ -468,6 +533,7 @@ DIAGRAM_JS = r"""
       const end = parseDate(project.end_date);
       const left = pct(start, rangeStart, rangeEnd);
       const width = Math.max(pct(end, rangeStart, rangeEnd) - left, 8);
+      const endPct = left + width;
 
       const bar = document.createElement("div");
       bar.className = `project-bar ${RAG_CLASS[project.rag_status] || "rag-amber"}`;
@@ -477,20 +543,18 @@ DIAGRAM_JS = r"""
       bar.innerHTML = `
         <div class="title">${project.title}</div>
         <div class="meta">
-          ${project.accountable_contact_name}<br />
-          ${project.start_date} → ${project.end_date}<br />
-          Capex ${formatMoney(project.capex_gbp)} · Opex ${formatMoney(project.opex_gbp)}<br />
-          ${project.description}
+          ${project.id} - ${project.start_date} - ${project.end_date}
         </div>
       `;
       track.appendChild(bar);
 
-      const linked = edgesByProject[project.id] || [];
+      const linked = (edgesByProject[project.id] || []).filter(
+        (edge) => edge.linked_type === "risk" || edge.linked_type === "architecture"
+      );
       const impacts = document.createElement("div");
       impacts.className = "impacts";
-      impacts.style.left = left + "%";
-      impacts.style.width = width + "%";
-      impacts.style.top = "100px";
+      impacts.style.left = endPct + "%";
+      impacts.style.transform = "translateX(-12px)";
 
       linked.forEach((edge) => {
         const isRisk = edge.linked_type === "risk";
@@ -513,8 +577,8 @@ DIAGRAM_JS = r"""
             </div>
           </div>
           <div class="impact-label">
-            <span class="iid">${item.id}</span> ${item.title}<br />
-            <span style="color:var(--muted)">${edge.relationship}</span>
+            <span class="iid">${item.id}</span> ${item.title}
+            <span class="rel"> · ${edge.relationship}</span>
           </div>
         `;
         impact.addEventListener("click", (evt) => {
@@ -525,15 +589,50 @@ DIAGRAM_JS = r"""
       });
 
       track.appendChild(impacts);
+      track.style.minHeight =
+        linked.length === 0 ? "72px" : 68 + linked.length * 28 + 12 + "px";
 
-      // Let the impacts area determine row height after layout.
-      const impactRows = Math.max(1, Math.ceil(linked.length / 3));
-      const neededHeight = 100 + impactRows * 70 + 12;
-      track.style.minHeight = neededHeight + "px";
+      lane.appendChild(track);
+      container.appendChild(lane);
+    }
 
-      row.appendChild(label);
-      row.appendChild(track);
-      rows.appendChild(row);
+    const byZone = {};
+    for (const project of data.projects) {
+      const zoneName = project.zone_name || "Unassigned zone";
+      const subName = project.sub_zone_name || "Unassigned sub-zone";
+      ((byZone[zoneName] ||= {})[subName] ||= []).push(project);
+    }
+
+    for (const [zoneName, subZones] of Object.entries(byZone)) {
+      const zoneGroup = document.createElement("div");
+      zoneGroup.className = "zone-group";
+
+      const zoneTitle = document.createElement("h2");
+      zoneTitle.className = "zone-group-title";
+      zoneTitle.textContent = `Zone: ${zoneName}`;
+      zoneGroup.appendChild(zoneTitle);
+
+      for (const [subName, projects] of Object.entries(subZones)) {
+        const row = document.createElement("div");
+        row.className = "row";
+
+        const label = document.createElement("div");
+        label.className = "row-label";
+        label.innerHTML = `
+          <strong>SubZone: ${subName}</strong>
+          ${projects.length} project${projects.length === 1 ? "" : "s"}
+        `;
+
+        const box = document.createElement("div");
+        box.className = "group-box";
+        projects.forEach((project) => appendProjectLane(box, project));
+
+        row.appendChild(label);
+        row.appendChild(box);
+        zoneGroup.appendChild(row);
+      }
+
+      rows.appendChild(zoneGroup);
     }
 
     ["toggle-projects", "toggle-risks", "toggle-architecture"].forEach((id) => {
@@ -558,9 +657,9 @@ DIAGRAM_JS = r"""
 @diagram_bp.route("/diagram")
 def diagram_page():
     return render_page(
-        title="Project Impact Timeline",
-        subtitle="Projects address corporate risks and change architecture components",
-        active="Timeline",
+        title="Project Roadmap",
+        subtitle="Projects grouped by zone and sub-zone · linked risks and architecture impacts",
+        active="Project Roadmap",
         body=DIAGRAM_BODY,
         extra_css=EXTRA_CSS,
         extra_js=DIAGRAM_JS,
